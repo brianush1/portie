@@ -12,10 +12,17 @@ export namespace AST {
 		value: Expr;
 	}
 
+	export interface Import {
+		span: Span;
+		module: string;
+		symbols: string[];
+	}
+
 	export interface File {
 		kind: "file";
 		span: Span;
-		body: Exclude<Decl, VarDecl>[];
+		imports: Import[];
+		body: Decl[];
 	}
 
 	// Expression statements:
@@ -32,7 +39,7 @@ export namespace AST {
 	// Statements:
 
 	export type Stat = Decl | ExprStat
-		| If | While | Return;
+		| If | While | Return | InlineLua;
 
 	export interface If {
 		kind: "if";
@@ -55,6 +62,12 @@ export namespace AST {
 		value?: Expr;
 	}
 
+	export interface InlineLua {
+		kind: "inline-lua";
+		span: Span;
+		value: string;
+	}
+
 	// Declarations:
 
 	export type Decl = Attribute | FuncDecl | VarDecl;
@@ -67,7 +80,7 @@ export namespace AST {
 			name: string;
 			type: Type;
 		}[];
-		returnType?: AST.Type;
+		returnType: AST.Type;
 		body: Stat[];
 	}
 
@@ -76,7 +89,7 @@ export namespace AST {
 		span: Span;
 		name: string;
 		isConst: boolean;
-		type?: Type;
+		type: Type;
 		value: Expr;
 	}
 
@@ -85,7 +98,7 @@ export namespace AST {
 	export interface ScopedAttribute {
 		kind: "scoped-attribute";
 		span: Span;
-		which: "public";
+		which: "private";
 		value?: Expr;
 	}
 
@@ -133,6 +146,7 @@ export namespace AST {
 		| "||"
 		| "&&"
 		| "<" | ">" | "<=" | ">=" | "==" | "!="
+		| ".."
 		| "+" | "-"
 		| "*" | "/" | "%";
 
@@ -249,6 +263,8 @@ const INFIX_PARSELETS: { [x: string]: InfixParselet } = {
 	">=": new BinaryParselet(300, ">=", "left"),
 	"==": new BinaryParselet(300, "==", "left"),
 	"!=": new BinaryParselet(300, "!=", "left"),
+
+	"..": new BinaryParselet(450, "..", "right"),
 
 	"+": new BinaryParselet(500, "+", "left"),
 	"-": new BinaryParselet(500, "-", "left"),
@@ -388,26 +404,46 @@ export class Parser {
 	}
 
 	parse(): AST.File {
-		const body: AST.FuncDecl[] = [];
+		const imports: AST.Import[] = [];
+		while (this.lexer.tryNext(["keyword", "import"])) {
+			const startToken = this.lexer.last();
+			let module = this.lexer.next("name", "expected name in import")?.value;
+			while (module && this.lexer.tryNext(["symbol", "."])) {
+				const name = this.lexer.next("name", "expected name in import")?.value;
+				if (name) {
+					module += "." + name;
+				}
+				else {
+					break;
+				}
+			}
+			this.lexer.next(["symbol", ":"], "expected ':' to separate symbols from module");
+			const symbols = [];
+			while (this.lexer.until(["symbol", ";"])) {
+				const symbol = this.lexer.next("name", "expected name in import")?.value;
+				if (symbol) {
+					symbols.push(symbol);
+				}
+				if (!this.lexer.tryNext(["symbol", ","])) {
+					break;
+				}
+			}
+			this.semi();
+			if (module)
+				imports.push({ span: combineSpans(startToken.span, this.lexer.last().span),
+					module, symbols });
+		}
+		const body: AST.Decl[] = [];
 		while (!this.lexer.eof()) {
 			const decl = this.decl();
 			if (decl !== undefined) {
-				if (decl.kind === "func-decl") {
-					body.push(decl);
-				}
-				else {
-					this.diagnostics.push({
-						kind: "error",
-						message: "expected function declaration",
-						spans: [decl.span],
-					});
-				}
+				body.push(decl);
 			}
 		}
 		return {
 			kind: "file",
 			span: this.lexer.fileSpan(),
-			body,
+			imports, body,
 		};
 	}
 
@@ -448,6 +484,18 @@ export class Parser {
 				span: combineSpans(start.span, this.lexer.last().span),
 				value,
 			};
+		}
+		else if (this.lexer.tryNext(["keyword", "inline_lua"])) {
+			const value = this.lexer.next("string", "expected string")?.value;
+			this.semi();
+			if (!value) {
+				return undefined;
+			}
+			return {
+				kind: "inline-lua",
+				span: combineSpans(start.span, this.lexer.last().span),
+				value,
+			}
 		}
 		else {
 			const state = this.lexer.save();
@@ -490,8 +538,8 @@ export class Parser {
 			name: string;
 			type: AST.Type;
 		}[];
-		returnType?: AST.Type;
-	} {
+		returnType: AST.Type;
+	} | undefined {
 		const start = this.lexer.peek();
 		this.lexer.next(["symbol", "("], "expected '(' to open parameter list");
 		const params: {
@@ -510,9 +558,10 @@ export class Parser {
 			}
 		}
 		this.lexer.next(["symbol", ")"], "expected ')' to close parameter list");
-		let returnType: AST.Type | undefined;
-		if (this.lexer.tryNext(["symbol", ":"])) {
-			returnType = this.type();
+		this.lexer.next(["symbol", ":"], "expected ':' to separate return type");
+		const returnType = this.type();
+		if (!returnType) {
+			return undefined;
 		}
 		const body = this.body("function");
 		return {
@@ -522,6 +571,16 @@ export class Parser {
 	}
 
 	decl(): AST.Decl | undefined {
+		const start = this.lexer.peek();
+		if (this.lexer.tryNext(["keyword", "private"])) {
+			this.lexer.next(["symbol", ":"], "expected ':' after scoped attribute 'private'");
+			return {
+				kind: "scoped-attribute",
+				span: combineSpans(start.span, this.lexer.last().span),
+				which: "private",
+			};
+		}
+
 		const constToken = this.lexer.tryNext(["keyword", "const"]);
 		const isConst = constToken ? true : false;
 		const nameToken = this.lexer.next("name", "expected name in declaration");
@@ -537,6 +596,9 @@ export class Parser {
 				});
 			}
 			const func = this.func();
+			if (func === undefined) {
+				return undefined;
+			}
 			return {
 				kind: "func-decl",
 				span: combineSpans(nameToken.span, func.span),
@@ -548,9 +610,9 @@ export class Parser {
 		}
 		else {
 			this.lexer.next(["symbol", ":"], "expected ':' to begin variable declaration");
-			let type: AST.Type | undefined;
-			if (!this.lexer.isNext(["symbol", "="])) {
-				type = this.type();
+			const type = this.type();
+			if (type === undefined) {
+				return undefined;
 			}
 			this.lexer.next(["symbol", "="], "expected '=' to separate variable from initial value");
 			const value = this.exprOrNil();

@@ -42,14 +42,17 @@ const SYMBOLS = [
 	// Brackets:
 	"(", ")", "[", "]", "{", "}",
 
-	// Miscellaneous:
+	// Multipurpose:
 	".", ";", ":", "=>", "->",
+
+	// Miscellaneous:
+	"..",
 ];
 
 SYMBOLS.sort((a, b) => b.length - a.length);
 
 const KEYWORDS = [
-	"private",
+	"private", "import", "inline_lua",
 	"if", "else",
 	"return",
 	"typedef",
