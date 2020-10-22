@@ -1,139 +1,11 @@
 import { Diagnostic, Span } from "./diagnostic";
 import { AST } from "./parser";
 
-export abstract class TypeInfo {
-
-	/** This should not be called directly; use Types.isSupersetOf */
-	abstract isSupersetOf(other: TypeInfo): boolean;
-
-	/** This should not be called directly; use Types.isSubsetOf */
-	isSubsetOf(other: TypeInfo): boolean {
-		return other.isSupersetOf(this);
-	}
-
-	/** This should not be called directly; use Types.areEqual */
-	abstract equals(other: TypeInfo): boolean;
-
-	abstract toString(): string;
-
-}
-
-export namespace Types {
-
-	export function isSupersetOf(a: TypeInfo, b: TypeInfo) {
-		return a.isSupersetOf(b) || b.isSubsetOf(a);
-	}
-
-	export function areEqual(a: TypeInfo, b: TypeInfo) {
-		return a.equals(b) || b.equals(a);
-	}
-
-	export const Nil = new class extends TypeInfo {
-
-		isSupersetOf(other: TypeInfo): boolean {
-			return other instanceof Nil.constructor;
-		}
-
-		equals(other: TypeInfo): boolean {
-			return other instanceof Nil.constructor;
-		}
-
-		toString(): string {
-			return "nil";
-		}
-
-	};
-
-	export const Int = new class extends TypeInfo {
-
-		isSupersetOf(other: TypeInfo): boolean {
-			return other instanceof Int.constructor;
-		}
-
-		equals(other: TypeInfo): boolean {
-			return other instanceof Int.constructor;
-		}
-
-		toString(): string {
-			return "int";
-		}
-
-	};
-
-	export const Bool = new class extends TypeInfo {
-
-		isSupersetOf(other: TypeInfo): boolean {
-			return other instanceof Bool.constructor;
-		}
-
-		equals(other: TypeInfo): boolean {
-			return other instanceof Bool.constructor;
-		}
-
-		toString(): string {
-			return "bool";
-		}
-
-	};
-
-	export const String = new class extends TypeInfo {
-
-		isSupersetOf(other: TypeInfo): boolean {
-			return other instanceof String.constructor;
-		}
-
-		equals(other: TypeInfo): boolean {
-			return other instanceof String.constructor;
-		}
-
-		toString(): string {
-			return "string";
-		}
-
-	};
-
-	export class Function extends TypeInfo {
-
-		constructor(
-			public returnType: TypeInfo,
-			public argsTypes: TypeInfo[],
-		) {
-			super();
-		}
-
-		isSupersetOf(other: TypeInfo): boolean {
-			if (other instanceof Function) {
-				return isSupersetOf(this.returnType, other.returnType)
-					&& this.argsTypes.length >= other.argsTypes.length
-					&& other.argsTypes.every((value, i) => isSupersetOf(value, this.argsTypes[i]));
-			}
-			else {
-				return false;
-			}
-		}
-
-		equals(other: TypeInfo): boolean {
-			if (other instanceof Function) {
-				return areEqual(this.returnType, other.returnType)
-					&& this.argsTypes.length === other.argsTypes.length
-					&& this.argsTypes.every((value, i) => areEqual(value, other.argsTypes[i]));
-			}
-			else {
-				return false;
-			}
-		}
-
-		toString(): string {
-			return `function(${this.argsTypes.map(x => x.toString()).join(", ")}): ${this.returnType.toString()}`;
-		}
-
-	}
-
-}
+type VarInfo = { isConst: boolean };
 
 class Environment {
 
-	variables = new Map<string, TypeInfo>();
+	variables = new Map<string, VarInfo>();
 
 	constructor(
 		public checker: Typechecker,
@@ -141,7 +13,7 @@ class Environment {
 		public attributes: { [x: string]: boolean } = {},
 	) { }
 
-	declare(span: Span, name: string, typeInfo: TypeInfo) {
+	declare(span: Span, name: string, isConst: boolean) {
 		if (this.variables.has(name)) {
 			this.checker.diagnostics.push({
 				kind: "error",
@@ -150,20 +22,19 @@ class Environment {
 			});
 		}
 		else {
-			this.variables.set(name, typeInfo);
+			this.variables.set(name, { isConst });
 		}
 	}
 
-	get(name: string): TypeInfo | undefined {
+	get(name: string): VarInfo | undefined {
 		return this.variables.get(name) ?? this.parent?.get(name);
 	}
 
 }
 
 interface TypecheckerResult {
-	publicTypes: { [x: string]: TypeInfo };
+	publicTypes: { [x: string]: VarInfo };
 	dependsOn: string[];
-	typeAnnotations: WeakMap<AST.Expr, TypeInfo>;
 }
 
 class Typechecker {
@@ -171,14 +42,14 @@ class Typechecker {
 	result: TypecheckerResult = {
 		publicTypes: {},
 		dependsOn: [],
-		typeAnnotations: new WeakMap,
 	};
 
 	constructor(public ast: AST.File, public diagnostics: Diagnostic[]) { }
 
-	env = new Environment(this, undefined, {
+	genv = new Environment(this, undefined, {
 		private: false,
 	});
+	env = this.genv;
 
 	newEnv() {
 		this.env = new Environment(this, this.env);
@@ -214,7 +85,7 @@ class Typechecker {
 	checkFile(node: AST.File) {
 		for (const impor of node.imports) {
 			for (const symbol of impor.symbols) {
-				this.env.declare(impor.span, symbol, Types.Nil); // TODO: proper types
+				this.env.declare(impor.span, symbol, true);
 			}
 		}
 		for (const decl of node.body) {
@@ -222,13 +93,13 @@ class Typechecker {
 				this.check(decl);
 			}
 			else {
-				this.result.publicTypes[decl.name] = Types.Nil; // TODO: proper types
-
 				if (decl.kind === "func-decl") {
-					this.env.declare(decl.span, decl.name, Types.Nil); // TODO: proper types
+					this.result.publicTypes[decl.name] = { isConst: true };
+					this.env.declare(decl.span, decl.name, true);
 				}
 				else if (decl.kind === "var-decl") {
-					this.env.declare(decl.span, decl.name, Types.Nil); // TODO: proper types
+					this.result.publicTypes[decl.name] = { isConst: decl.isConst };
+					this.env.declare(decl.span, decl.name, decl.isConst);
 				}
 			}
 		}
@@ -237,7 +108,7 @@ class Typechecker {
 				// don't forget about checkFuncDecl
 				this.newEnv();
 				for (const param of decl.params) {
-					this.env.declare(decl.span, param.name, Types.Nil); // TODO: proper types
+					this.env.declare(decl.span, param.name, true);
 				}
 				for (const stat of decl.body) {
 					this.check(stat);
@@ -253,6 +124,20 @@ class Typechecker {
 
 	checkFuncCall(node: AST.FuncCall) {
 		this.check(node.func);
+		for (const arg of node.args) {
+			this.check(arg);
+		}
+	}
+
+	checkPipeCall(node: AST.PipeCall) {
+		this.check(node.base);
+		if (!this.genv.get(node.func)) {
+			this.diagnostics.push({
+				spans: [node.span],
+				kind: "error",
+				message: `use of undeclared variable '${node.func}'`,
+			});
+		}
 		for (const arg of node.args) {
 			this.check(arg);
 		}
@@ -287,12 +172,35 @@ class Typechecker {
 
 	checkInlineLua(node: AST.InlineLua) {}
 
+	checkAssign(node: AST.Assign) {
+		this.check(node.lvalue);
+		this.check(node.rvalue);
+
+		if (node.lvalue.kind === "var-access") {
+			const info = this.env.get(node.lvalue.name);
+			if (!info) {
+				this.diagnostics.push({
+					spans: [node.span],
+					kind: "error",
+					message: `use of undeclared variable '${node.lvalue.name}'`,
+				});
+			}
+			else if (info.isConst) {
+				this.diagnostics.push({
+					spans: [node.span],
+					kind: "error",
+					message: `cannot reassign const variable '${node.lvalue.name}'`,
+				});
+			}
+		}
+	}
+
 	checkFuncDecl(node: AST.FuncDecl) {
 		// don't forget about checkFile
-		this.env.declare(node.span, node.name, Types.Nil); // TODO: proper types
+		this.env.declare(node.span, node.name, true);
 		this.newEnv();
 		for (const param of node.params) {
-			this.env.declare(node.span, param.name, Types.Nil); // TODO: proper types
+			this.env.declare(node.span, param.name, true);
 		}
 		for (const stat of node.body) {
 			this.check(stat);
@@ -303,7 +211,7 @@ class Typechecker {
 	checkVarDecl(node: AST.VarDecl) {
 		// don't forget about checkFile
 		this.check(node.value);
-		this.env.declare(node.span, node.name, Types.Nil); // TODO: proper types
+		this.env.declare(node.span, node.name, node.isConst);
 	}
 
 	checkScopedAttribute(node: AST.ScopedAttribute) {

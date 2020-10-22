@@ -1,5 +1,0 @@
-import std.io : print;
-
-main(): nil {
-	print(2);
-}

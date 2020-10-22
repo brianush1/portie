@@ -1,0 +1,5 @@
+toString(s: unknown): string {
+	result: string = "";
+	inline_lua "c_result = tostring(c_s)";
+	return result;
+}

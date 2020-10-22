@@ -1,8 +1,0 @@
-{
-	"name": "portie-compiler",
-	"module": "piec",
-	"importPath": [""],
-	"dependencies": {
-		"std": "any"
-	}
-}

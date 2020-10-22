@@ -1,3 +1,4 @@
+import { Pipe } from "stream";
 import { Diagnostic, Span } from "./diagnostic";
 import { Lexer, Token, TokenOf } from "./lexer";
 import { report } from "./reporter";
@@ -27,7 +28,7 @@ export namespace AST {
 
 	// Expression statements:
 
-	export type ExprStat = FuncCall;
+	export type ExprStat = FuncCall | PipeCall;
 
 	export interface FuncCall {
 		kind: "func-call";
@@ -36,10 +37,19 @@ export namespace AST {
 		args: Expr[];
 	}
 
+	export interface PipeCall {
+		kind: "pipe-call";
+		span: Span;
+		base: Expr;
+		func: string;
+		args: Expr[];
+	}
+
 	// Statements:
 
 	export type Stat = Decl | ExprStat
-		| If | While | Return | InlineLua;
+		| If | While | Return | InlineLua
+		| Assign;
 
 	export interface If {
 		kind: "if";
@@ -68,6 +78,13 @@ export namespace AST {
 		value: string;
 	}
 
+	export interface Assign {
+		kind: "assign";
+		span: Span;
+		lvalue: VarAccess | Index;
+		rvalue: Expr;
+	}
+
 	// Declarations:
 
 	export type Decl = Attribute | FuncDecl | VarDecl;
@@ -80,7 +97,7 @@ export namespace AST {
 			name: string;
 			type: Type;
 		}[];
-		returnType: AST.Type;
+		returnType?: AST.Type;
 		body: Stat[];
 	}
 
@@ -89,7 +106,7 @@ export namespace AST {
 		span: Span;
 		name: string;
 		isConst: boolean;
-		type: Type;
+		type?: Type;
 		value: Expr;
 	}
 
@@ -338,6 +355,34 @@ const INFIX_PARSELETS: { [x: string]: InfixParselet } = {
 			};
 		}
 	}(800),
+
+	"->": new class extends InfixParselet {
+		parse(lhs: AST.Expr, lexer: Lexer, parser: Parser, token: Token): AST.Expr | undefined {
+			const func = lexer.next("name", "expected name in pipe")?.value;
+			if (!func) {
+				return undefined;
+			}
+			lexer.next(["symbol", "("], "expected '(' to open argument list");
+			const args: AST.Expr[] = [];
+			while (lexer.until(["symbol", ")"])) {
+				const expr = parser.expr();
+				if (expr) {
+					args.push(expr);
+				}
+				if (!lexer.tryNext(["symbol", ","])) {
+					break;
+				}
+			}
+			lexer.next(["symbol", ")"], "expected ')' to close argument list");
+			return {
+				kind: "pipe-call",
+				span: combineSpans(lhs.span, lexer.last().span),
+				base: lhs,
+				func,
+				args,
+			};
+		}
+	}(800),
 };
 
 function combineSpans(span: Span, ...spans: Span[]): Span {
@@ -501,7 +546,7 @@ export class Parser {
 			const state = this.lexer.save();
 			const stat = this.expr();
 			if (this.lexer.tryNext(["symbol", ";"])) {
-				if (stat?.kind === "func-call") {
+				if (stat?.kind === "func-call" || stat?.kind === "pipe-call") {
 					return stat;
 				}
 				else if (stat === undefined) {
@@ -522,6 +567,17 @@ export class Parser {
 					return undefined;
 				}
 			}
+			else if ((stat?.kind === "var-access" || stat?.kind === "index")
+				&& this.lexer.tryNext(["symbol", "="])) {
+				const rvalue = this.exprOrNil();
+				this.semi();
+				return {
+					kind: "assign",
+					span: combineSpans(stat.span, this.lexer.last().span),
+					lvalue: stat,
+					rvalue,
+				};
+			}
 			else {
 				this.lexer.restore(state);
 				return this.decl();
@@ -538,7 +594,7 @@ export class Parser {
 			name: string;
 			type: AST.Type;
 		}[];
-		returnType: AST.Type;
+		returnType?: AST.Type;
 	} | undefined {
 		const start = this.lexer.peek();
 		this.lexer.next(["symbol", "("], "expected '(' to open parameter list");
@@ -558,10 +614,9 @@ export class Parser {
 			}
 		}
 		this.lexer.next(["symbol", ")"], "expected ')' to close parameter list");
-		this.lexer.next(["symbol", ":"], "expected ':' to separate return type");
-		const returnType = this.type();
-		if (!returnType) {
-			return undefined;
+		let returnType: AST.Type | undefined;
+		if (this.lexer.tryNext(["symbol", ":"])) {
+			returnType = this.type();
 		}
 		const body = this.body("function");
 		return {
@@ -609,10 +664,10 @@ export class Parser {
 			};
 		}
 		else {
-			this.lexer.next(["symbol", ":"], "expected ':' to begin variable declaration");
-			const type = this.type();
-			if (type === undefined) {
-				return undefined;
+			let type: AST.Type | undefined;
+			this.lexer.next(["symbol", ":"], "expected ':' to start declaration");
+			if (!this.lexer.isNext(["symbol", "="])) {
+				type = this.type();
 			}
 			this.lexer.next(["symbol", "="], "expected '=' to separate variable from initial value");
 			const value = this.exprOrNil();
@@ -653,8 +708,8 @@ export class Parser {
 		else if (token = this.lexer.tryNext(["symbol", "{"])) {
 			const fields: AST.TableLiteral["fields"] = [];
 			while (this.lexer.until(["symbol", "}"])) {
-				const constToken = this.lexer.tryNext(["keyword", "const"]);
-				const isConst = constToken ? true : false;
+				// const constToken = this.lexer.tryNext(["keyword", "const"]);
+				const isConst = /* constToken ? true : */ false;
 				let key: AST.Expr;
 				if (this.lexer.tryNext(["symbol", "["])) {
 					key = this.exprOrNil();

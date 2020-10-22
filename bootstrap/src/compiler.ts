@@ -2,10 +2,26 @@ import { AST } from "./parser";
 
 class Environment {
 
+	variables = new Map<string, string>();
+
 	constructor(
-		public parent?: Environment,
+		public parent: Environment | undefined,
+		public prefix: string,
 		public attributes: { [x: string]: boolean } = {},
 	) { }
+
+	declare(name: string) {
+		this.variables.set(name, `${this.prefix}${name}`);
+		return `${this.prefix}${name}`;
+	}
+
+	get(name: string): string {
+		const result = this.variables.get(name) ?? this.parent?.get(name);
+		if (!result) {
+			throw new Error("internal compiler error");
+		}
+		return result;
+	}
 
 }
 
@@ -17,14 +33,15 @@ class Compiler {
 
 	constructor(public ast: AST.File) { }
 
-	env = new Environment(undefined, {
+	genv = new Environment(undefined, "g_", {
 		private: false,
 	});
+	env = this.genv;
 
 	publicDecls: string[] = [];
 
 	newEnv() {
-		this.env = new Environment(this.env);
+		this.env = new Environment(this.env, "c_");
 	}
 
 	exitEnv() {
@@ -45,12 +62,12 @@ class Compiler {
 		if (condition.decl) {
 			return `do ${this.compile(condition.decl)} `
 				+ `${blockPattern.replace("$",
-					(condition.inverted ? "not " : "") + `(${this.compile(condition.value)})`
+					(condition.inverted ? "not " : "") + `s.toBool(${this.compile(condition.value)})`
 				)}`;
 		}
 		else {
 			return blockPattern.replace("$",
-				(condition.inverted ? "not " : "") + `(${this.compile(condition.value)})`
+				(condition.inverted ? "not " : "") + `s.toBool(${this.compile(condition.value)})`
 			);
 		}
 	}
@@ -78,9 +95,9 @@ class Compiler {
 
 	compileFile(node: AST.File) {
 		const program = [];
-		program.push("local s = require(\"out.runtime\")");
+		program.push("local s = require(\"out.__runtime\")");
 		for (const impor of node.imports) {
-			program.push(`${impor.symbols.map(x => `c_${x}`)
+			program.push(`local ${impor.symbols.map(x => this.env.declare(x))
 				.join(", ")} = s.import(${[impor.module, ...impor.symbols]
 				.map(x => `"${x}"`).join(", ")})`);
 		}
@@ -88,7 +105,7 @@ class Compiler {
 		const globals = [];
 		for (const decl of node.body) {
 			if (decl.kind !== "scoped-attribute") {
-				globals.push(`c_${decl.name}`);
+				globals.push(this.env.declare(decl.name));
 			}
 		}
 		program.push(`local ${globals.join(", ")}`);
@@ -104,19 +121,23 @@ class Compiler {
 				if (decl.kind === "func-decl") {
 					// don't forget about compileFuncDecl
 					this.newEnv();
-					const result = `function c_${decl.name}(${decl.params.map(x => `c_${x.name}`).join(", ")})\n`
+					const result = `function ${this.env.get(decl.name)}(${
+						decl.params.map(x => this.env.declare(x.name)).join(", ")})\n`
 						+ indent(this.block(decl.body)) + `\nend`;
 					this.exitEnv();
 					program.push(result);
 				}
 				else if (decl.kind === "var-decl") {
 					// don't forget about compileVarDecl
-					program.push(`c_${decl.name} = ${this.compile(decl.value)}`);
+					program.push(`${this.env.declare(decl.name)} = ${this.compile(decl.value)}`);
 				}
 			}
 		}
 		for (const publicDecl of this.publicDecls) {
-			program.push(`exports.${publicDecl} = c_${publicDecl}`);
+			program.push(`exports.${publicDecl} = ${this.env.get(publicDecl)}`);
+			if (publicDecl === "main") {
+				program.push(`${this.env.get(publicDecl)}()`);
+			}
 		}
 		program.push("return exports");
 		return program.join(";\n");
@@ -124,6 +145,11 @@ class Compiler {
 
 	compileFuncCall(node: AST.FuncCall) {
 		return `s.call(${[node.func, ...node.args].map(x => this.compile(x)).join(", ")})`;
+	}
+
+	compilePipeCall(node: AST.PipeCall) {
+		return `s.call(${[this.genv.get(node.func),
+			...[node.base, ...node.args].map(x => this.compile(x))].join(", ")})`;
 	}
 
 	compileIf(node: AST.If) {
@@ -159,10 +185,22 @@ class Compiler {
 		return node.value;
 	}
 
+	compileAssign(node: AST.Assign) {
+		if (node.lvalue.kind === "index") {
+			return `s.newindex(${[node.lvalue.base,
+				...node.lvalue.args, node.rvalue].map(x => this.compile(x)).join(", ")})`;
+		}
+		else {
+			return `${this.env.get(node.lvalue.name)} = ${this.compile(node.rvalue)}`;
+		}
+	}
+
 	compileFuncDecl(node: AST.FuncDecl) {
 		// don't forget about compileFile
+		this.env.declare(node.name);
 		this.newEnv();
-		const result = `local function c_${node.name}(${node.params.map(x => `c_${x.name}`).join(", ")})\n`
+		const result = `local function ${this.env.get(node.name)}(${
+			node.params.map(x => this.env.declare(x.name)).join(", ")})\n`
 			+ indent(this.block(node.body)) + `\nend`;
 		this.exitEnv();
 		return result;
@@ -170,7 +208,7 @@ class Compiler {
 
 	compileVarDecl(node: AST.VarDecl) {
 		// don't forget about compileFile
-		return `local c_${node.name} = ${this.compile(node.value)}`;
+		return `local ${this.env.declare(node.name)} = ${this.compile(node.value)}`;
 	}
 
 	compileScopedAttribute(node: AST.ScopedAttribute) {
@@ -189,7 +227,7 @@ class Compiler {
 	}
 
 	compileStrLiteral(node: AST.StrLiteral) {
-		return "s.string\"" + [...new TextEncoder().encode(node.value)].map(x => {
+		return "\"" + [...new TextEncoder().encode(node.value)].map(x => {
 			if (x >= 32 && x <= 126) {
 				return String.fromCodePoint(x);
 			}
@@ -200,7 +238,7 @@ class Compiler {
 	}
 
 	compileNumLiteral(node: AST.NumLiteral) {
-		return node.value.toString(); // TODO: better
+		return `${node.value}`; // TODO: better precision
 	}
 
 	compileNilLiteral(node: AST.NilLiteral) {
@@ -208,11 +246,11 @@ class Compiler {
 	}
 
 	compileVarAccess(node: AST.VarAccess) {
-		return `c_${node.name}`;
+		return this.env.get(node.name);
 	}
 
 	compileTableLiteral(node: AST.TableLiteral) {
-		return "{\n" + indent(node.fields.map(x => `[${this.compile(x.key)}] = ${this.compile(x.value)};`).join("\n")) + "\n}";
+		return "s.table {\n" + indent(node.fields.map(x => `[${this.compile(x.key)}] = ${this.compile(x.value)};`).join("\n")) + "\n}";
 	}
 
 	compileBinOp(node: AST.BinOp) {

@@ -1,0 +1,6 @@
+import std.io : println, print;
+
+main() {
+	print(2);
+	println(3);
+}

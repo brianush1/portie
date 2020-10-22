@@ -1,0 +1,9 @@
+import std.conv : toString;
+
+print(s: string): nil {
+	inline_lua "io.write(c_s)";
+}
+
+println(s: string): nil {
+	print(toString(s) .. "\n");
+}

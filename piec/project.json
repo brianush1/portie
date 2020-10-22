@@ -1,0 +1,11 @@
+{
+	"name": "portie-compiler",
+	"type": "application",
+	"module-root": "piec",
+	"dependencies": [
+		{
+			"type": "local",
+			"path": "../std"
+		}
+	]
+}

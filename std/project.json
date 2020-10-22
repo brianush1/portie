@@ -1,0 +1,5 @@
+{
+	"name": "standard-library",
+	"type": "library",
+	"module-root": "std"
+}
