@@ -367,7 +367,7 @@ const INFIX_PARSELETS: { [x: string]: InfixParselet } = {
 		}
 	}(800),
 
-	"->": new class extends InfixParselet {
+	":": new class extends InfixParselet {
 		parse(lhs: AST.Expr, lexer: Lexer, parser: Parser, token: Token): AST.Expr | undefined {
 			const func = lexer.next("name", "expected name in pipe")?.value;
 			if (!func) {
