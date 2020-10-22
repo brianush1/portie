@@ -52,7 +52,7 @@ const SYMBOLS = [
 SYMBOLS.sort((a, b) => b.length - a.length);
 
 const KEYWORDS = [
-	"private", "import", "inline_lua",
+	"private", "import", "inline_lua", "nil",
 	"if", "else",
 	"return",
 	"typedef",

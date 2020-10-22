@@ -122,7 +122,7 @@ export namespace AST {
 	// Expressions:
 
 	export type Expr = ExprStat | StrLiteral | NumLiteral
-		| NilLiteral | VarAccess | TableLiteral
+		| NilLiteral | VarAccess | TableLiteral | ArrayLiteral
 		| BinOp | UnOp | Index;
 
 	export interface StrLiteral {
@@ -159,6 +159,12 @@ export namespace AST {
 		}[];
 	}
 
+	export interface ArrayLiteral {
+		kind: "array-literal";
+		span: Span;
+		values: Expr[];
+	}
+
 	export type BinOperator =
 		| "||"
 		| "&&"
@@ -193,12 +199,17 @@ export namespace AST {
 
 	// Types:
 
-	export type Type = NamedType;
+	export type Type = NamedType | NilType;
 
 	export interface NamedType {
 		kind: "named-type";
 		span: Span;
 		name: string;
+	}
+
+	export interface NilType {
+		kind: "nil-type";
+		span: Span;
 	}
 
 }
@@ -698,6 +709,12 @@ export class Parser {
 				value: Number(token.value),
 			};
 		}
+		else if (token = this.lexer.tryNext(["keyword", "nil"])) {
+			return {
+				kind: "nil-literal",
+				span: combineSpans(token.span),
+			};
+		}
 		else if (token = this.lexer.tryNext("name")) {
 			return {
 				kind: "var-access",
@@ -745,6 +762,25 @@ export class Parser {
 				kind: "table-literal",
 				span: token.span,
 				fields,
+			};
+		}
+		else if (token = this.lexer.tryNext(["symbol", "["])) {
+			const values: AST.Expr[] = [];
+			while (this.lexer.until(["symbol", "}"])) {
+				const value = this.exprOrNil();
+				values.push(value);
+				if (this.lexer.isNext(["symbol", ","])) {
+					this.lexer.next();
+				}
+				else {
+					break;
+				}
+			}
+			this.lexer.next(["symbol", "]"], "expected ']' to close array literal");
+			return {
+				kind: "array-literal",
+				span: token.span,
+				values,
 			};
 		}
 		else {
@@ -830,6 +866,12 @@ export class Parser {
 				kind: "named-type",
 				span: token.span,
 				name: token.value,
+			};
+		}
+		else if (token = this.lexer.tryNext(["keyword", "nil"])) {
+			return {
+				kind: "nil-type",
+				span: token.span,
 			};
 		}
 		else {

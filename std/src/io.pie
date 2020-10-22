@@ -1,7 +1,7 @@
 import std.conv : toString;
 
 print(s: string): nil {
-	inline_lua "io.write(c_s)";
+	inline_lua "io.write(s.tostring(c_s))";
 }
 
 println(s: string): nil {

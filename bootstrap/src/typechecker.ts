@@ -257,6 +257,12 @@ class Typechecker {
 		}
 	}
 
+	checkArrayLiteral(node: AST.ArrayLiteral) {
+		for (const value of node.values) {
+			this.check(value);
+		}
+	}
+
 	checkBinOp(node: AST.BinOp) {
 		this.check(node.lhs);
 		this.check(node.rhs);

@@ -253,6 +253,10 @@ class Compiler {
 		return "s.table {\n" + indent(node.fields.map(x => `[${this.compile(x.key)}] = ${this.compile(x.value)};`).join("\n")) + "\n}";
 	}
 
+	compileArrayLiteral(node: AST.ArrayLiteral) {
+		return `s.array(${node.values.length}, {${node.values.map(x => this.compile(x)).join(", ")}})`;
+	}
+
 	compileBinOp(node: AST.BinOp) {
 		return `s.applyBinOp("${node.op}", ${this.compile(node.lhs)}, ${this.compile(node.rhs)})`
 	}

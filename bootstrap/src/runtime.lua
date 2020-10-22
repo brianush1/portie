@@ -7,6 +7,9 @@ local mt = {
 		call = function(obj, ...)
 			return obj(...)
 		end,
+		tostring = function(obj)
+			return "<anonymous function>"
+		end,
 	},
 	number = {
 		["bin<"] = function(lhs, rhs)
@@ -33,6 +36,12 @@ local mt = {
 		["bin%"] = function(lhs, rhs)
 			return lhs % rhs
 		end,
+		["un-"] = function(obj)
+			return -obj
+		end,
+		tostring = function(obj)
+			return ("%.20g"):format(obj)
+		end,
 	},
 	string = {
 		["bin.."] = function(lhs, rhs)
@@ -50,6 +59,19 @@ local mt = {
 		["bin=="] = function(lhs, rhs)
 			return lhs == rhs
 		end,
+		tostring = function(obj)
+			return obj
+		end,
+	},
+	boolean = {
+		tostring = function(obj)
+			return obj
+		end,
+	},
+	["nil"] = {
+		tostring = function(obj)
+			return "nil"
+		end,
 	},
 	table = {
 		index = function(obj, ...)
@@ -61,6 +83,74 @@ local mt = {
 			assert(select("#", ...) > 0, "TypeError")
 			local k = ...
 			obj.value[k] = val
+		end,
+		tostring = function(obj)
+			local content = {}
+			local i = 1
+			for k, v in pairs(obj) do
+				content[i] = "\t[" .. s.tostring(k) .. "] = " .. s.tostring(v) .. ";\n"
+				i = i + 1
+			end
+			return "{\n" .. table.concat(content, "") .. "}"
+		end,
+	},
+	array = {
+		index = function(obj, ...)
+			assert(select("#", ...) > 0, "TypeError")
+			local k = ...
+			if type(k) == "number" then
+				if k % 1 == 0 and k >= 0 and k < obj.length then
+					return obj.value[k + 1]
+				else
+					return nil
+				end
+			else
+				local methods = {
+					append = function(elem)
+						obj.value[obj.length + 1] = elem
+						obj.length = obj.length + 1
+					end,
+					indexOf = function(elem)
+						for i = 1, obj.length do
+							if s.applyBinOp("==", obj.value[i], elem) then
+								return i - 1
+							end
+						end
+						return nil
+					end,
+					remove = function(index)
+						for i = index + 1, obj.length - 1 do
+							obj.value[i] = obj.value[i + 1]
+						end
+						obj.value[obj.length] = nil
+						obj.length = obj.length - 1
+					end,
+				}
+				local result = methods.array[k]
+				if result then
+					return result
+				else
+					error("TypeError")
+				end
+			end
+		end,
+		newindex = function(obj, val, ...)
+			assert(select("#", ...) > 0, "TypeError")
+			local k = ...
+			if type(k) == "number" then
+				if k % 1 == 0 then
+					obj.value[k + 1] = val
+				end
+			else
+				error("TypeError")
+			end
+		end,
+		tostring = function(obj)
+			local content = {}
+			for i = 1, obj.length do
+				content[i] = s.tostring(obj.value[i])
+			end
+			return "[" .. table.concat(content, ", ") .. "]"
 		end,
 	},
 }
@@ -148,11 +238,23 @@ function s.newindex(base, ...)
 	return getMeta(base, "newindex")(base, args[len], unpack(args, 1, len - 1))
 end
 
+function s.tostring(obj)
+	return getMeta(obj, "tostring")(obj)
+end
+
 -- literals:
 
 function s.table(data)
 	return {
 		mt = mt.table,
+		value = data,
+	}
+end
+
+function s.array(length, data)
+	return {
+		mt = mt.array,
+		length = length,
 		value = data,
 	}
 end

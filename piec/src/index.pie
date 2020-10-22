@@ -1,6 +1,10 @@
 import std.io : println, print;
 
 main() {
-	print(2);
+	arr := [1, 2, 3];
+	println(arr);
+	arr[0] = 6;
+	println(arr);
+	println(nil);
 	println(3);
 }
