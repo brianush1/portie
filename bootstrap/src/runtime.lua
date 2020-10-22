@@ -125,8 +125,9 @@ local mt = {
 						obj.value[obj.length] = nil
 						obj.length = obj.length - 1
 					end,
+					length = obj.length,
 				}
-				local result = methods.array[k]
+				local result = methods[k]
 				if result then
 					return result
 				else
