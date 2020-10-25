@@ -21,6 +21,11 @@ function loadProject(root: string = "."): Project {
 	return JSON.parse(readFileSync(`${root}/project.json`, "utf-8"));
 }
 
+export const files: {
+	src: string,
+	module: string[],
+}[] = [];
+
 function buildProject(project: Project): boolean {
 	try { mkdirSync("./out"); } catch (e) {}
 	writeFileSync("./out/__runtime.lua", RUNTIME_SRC, "utf-8");
@@ -43,7 +48,12 @@ function buildProject(project: Project): boolean {
 			else if (child.isFile() && child.name.endsWith(".pie")) {
 				const src = readFileSync(`${[root, ...path, child.name].join("/")}`, "utf-8");
 				const diagnostics: Diagnostic[] = [];
-				const parse = new Parser(0, src, diagnostics);
+				const fileId = files.length;
+				files.push({
+					src,
+					module: [moduleRoot, ...path, child.name.substr(0, child.name.length - 4)],
+				});
+				const parse = new Parser(fileId, src, diagnostics);
 				const ast = parse.parse();
 				let reported = report(diagnostics);
 				if (reported !== "errors") {

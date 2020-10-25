@@ -101,9 +101,26 @@ class Typechecker {
 					this.result.publicTypes[decl.name] = { isConst: decl.isConst };
 					this.env.declare(decl.span, decl.name, decl.isConst);
 				}
+				else if (decl.kind === "class-decl") {
+					this.result.publicTypes[decl.name] = { isConst: true };
+					this.env.declare(decl.span, decl.name, true);
+				}
+				else {
+					throw 0;
+				}
 			}
 		}
 		for (const decl of node.body) {
+			if (decl.kind === "scoped-attribute") {
+				continue;
+			}
+			if (decl.name === "this") {
+				this.diagnostics.push({
+					kind: "error",
+					message: "'this' cannot be used as a variable name",
+					spans: [decl.span],
+				});
+			}
 			if (decl.kind === "func-decl") {
 				// don't forget about checkFuncDecl
 				this.newEnv();
@@ -119,6 +136,38 @@ class Typechecker {
 				// don't forget about checkVarDecl
 				this.check(decl.value);
 			}
+			else if (decl.kind === "class-decl") {
+				// don't forget about checkClassDecl
+				if (decl.base) {
+					this.check(decl.base);
+				}
+				this.env = new Environment(this, this.env, {
+					private: false,
+				});
+				this.env.declare(decl.span, "this", true);
+				for (const inner of decl.body) {
+					if (inner.kind === "func-decl" && inner.name === "this") {
+						this.newEnv();
+						for (const param of inner.params) {
+							this.env.declare(inner.span, param.name, true);
+						}
+						for (const stat of inner.body) {
+							this.check(stat);
+						}
+						this.exitEnv();
+					}
+					else if (inner.kind === "empty-var-decl") {
+						continue;
+					}
+					else {
+						this.check(inner);
+					}
+				}
+				this.exitEnv();
+			}
+			else {
+				throw 0;
+			}
 		}
 	}
 
@@ -126,6 +175,16 @@ class Typechecker {
 		this.check(node.func);
 		for (const arg of node.args) {
 			this.check(arg);
+		}
+	}
+
+	checkNewCall(node: AST.NewCall) {
+		this.check(node.classObj);
+		for (const arg of node.args) {
+			this.check(arg);
+		}
+		for (const field of node.fields) {
+			this.check(field.value);
 		}
 	}
 
@@ -214,6 +273,37 @@ class Typechecker {
 		this.env.declare(node.span, node.name, node.isConst);
 	}
 
+	checkClassDecl(node: AST.ClassDecl) {
+		// don't forget about checkFile
+		if (node.base) {
+			this.check(node.base);
+		}
+		this.env.declare(node.span, node.name, true);
+		this.env = new Environment(this, this.env, {
+			private: false,
+		});
+		this.env.declare(node.span, "this", true);
+		for (const inner of node.body) {
+			if (inner.kind === "func-decl" && inner.name === "this") {
+				this.newEnv();
+				for (const param of inner.params) {
+					this.env.declare(inner.span, param.name, true);
+				}
+				for (const stat of inner.body) {
+					this.check(stat);
+				}
+				this.exitEnv();
+			}
+			else if (inner.kind === "empty-var-decl") {
+				continue;
+			}
+			else {
+				this.check(inner);
+			}
+		}
+		this.exitEnv();
+	}
+
 	checkScopedAttribute(node: AST.ScopedAttribute) {
 		if (node.value !== undefined) {
 			this.diagnostics.push({
@@ -240,6 +330,26 @@ class Typechecker {
 	checkNumLiteral(node: AST.NumLiteral) {}
 
 	checkNilLiteral(node: AST.NilLiteral) {}
+
+	checkThisLiteral(node: AST.ThisLiteral) {
+		if (!this.env.get("this")) {
+			this.diagnostics.push({
+				spans: [node.span],
+				kind: "error",
+				message: `use of 'this' outside of class`,
+			});
+		}
+	}
+
+	checkSuperLiteral(node: AST.SuperLiteral) {
+		if (!this.env.get("this")) {
+			this.diagnostics.push({
+				spans: [node.span],
+				kind: "error",
+				message: `use of 'super' outside of class`,
+			});
+		}
+	}
 
 	checkVarAccess(node: AST.VarAccess) {
 		if (!this.env.get(node.name)) {

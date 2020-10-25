@@ -7,6 +7,7 @@ class Environment {
 	constructor(
 		public parent: Environment | undefined,
 		public prefix: string,
+		public globalDecls: boolean,
 		public attributes: { [x: string]: boolean } = {},
 	) { }
 
@@ -33,7 +34,7 @@ class Compiler {
 
 	constructor(public ast: AST.File) { }
 
-	genv = new Environment(undefined, "g_", {
+	genv = new Environment(undefined, "g_", true, {
 		private: false,
 	});
 	env = this.genv;
@@ -41,7 +42,7 @@ class Compiler {
 	publicDecls: string[] = [];
 
 	newEnv() {
-		this.env = new Environment(this.env, "c_");
+		this.env = new Environment(this.env, "c_", false);
 	}
 
 	exitEnv() {
@@ -118,19 +119,7 @@ class Compiler {
 					this.publicDecls.push(decl.name);
 				}
 
-				if (decl.kind === "func-decl") {
-					// don't forget about compileFuncDecl
-					this.newEnv();
-					const result = `function ${this.env.get(decl.name)}(${
-						decl.params.map(x => this.env.declare(x.name)).join(", ")})\n`
-						+ indent(this.block(decl.body)) + `\nend`;
-					this.exitEnv();
-					program.push(result);
-				}
-				else if (decl.kind === "var-decl") {
-					// don't forget about compileVarDecl
-					program.push(`${this.env.declare(decl.name)} = ${this.compile(decl.value)}`);
-				}
+				program.push(this.compile(decl));
 			}
 		}
 		for (const publicDecl of this.publicDecls) {
@@ -145,6 +134,12 @@ class Compiler {
 
 	compileFuncCall(node: AST.FuncCall) {
 		return `s.call(${[node.func, ...node.args].map(x => this.compile(x)).join(", ")})`;
+	}
+
+	compileNewCall(node: AST.NewCall) {
+		return `s.new({${
+			node.fields.flatMap(x => [`"${x.name}"`, this.compile(x.value)]).join(", ")
+		}}, ${[node.classObj, ...node.args].map(x => this.compile(x)).join(", ")})`;
 	}
 
 	compilePipeCall(node: AST.PipeCall) {
@@ -196,10 +191,10 @@ class Compiler {
 	}
 
 	compileFuncDecl(node: AST.FuncDecl) {
-		// don't forget about compileFile
 		this.env.declare(node.name);
+		const local = this.env.globalDecls ? "" : "local ";
 		this.newEnv();
-		const result = `local function ${this.env.get(node.name)}(${
+		const result = `${local}function ${this.env.get(node.name)}(${
 			node.params.map(x => this.env.declare(x.name)).join(", ")})\n`
 			+ indent(this.block(node.body)) + `\nend`;
 		this.exitEnv();
@@ -207,8 +202,41 @@ class Compiler {
 	}
 
 	compileVarDecl(node: AST.VarDecl) {
-		// don't forget about compileFile
-		return `local ${this.env.declare(node.name)} = ${this.compile(node.value)}`;
+		return `${this.env.globalDecls ? "" : "local "}${this.env.declare(node.name)} = ${this.compile(node.value)}`;
+	}
+
+	compileClassDecl(node: AST.ClassDecl) {
+		const name = this.env.declare(node.name);
+		this.env = new Environment(this.env, `${name}.decl.`, true, {
+			private: false,
+		});
+		const body = node.body.map(x => {
+			if (x.kind === "var-decl") {
+				return `${name}.fields.${x.name} = function(this) return ${this.compile(x.value)} end`;
+			}
+			else if (x.kind === "empty-var-decl") {
+				return `${name}.fields.${x.name} = "empty"`;
+			}
+			else if (x.kind === "func-decl") {
+				this.env.declare(x.name);
+				this.newEnv();
+				const result = `function ${this.env.get(x.name)}(${
+					["this", ...x.params.map(x => this.env.declare(x.name))].join(", ")})\n`
+					+ indent(this.block(x.body)) + `\nend`;
+				this.exitEnv();
+				return result;
+			}
+			else if (x.kind === "scoped-attribute") {
+				return this.compile(x);
+			}
+			else { // TODO: classes inside classes?
+				throw 0;
+			}
+		}).join(";\n");
+		this.exitEnv();
+		return `${this.env.globalDecls ? "" : "local "}${name} = s.class(${
+			node.base ? this.compile(node.base) : ""}) do\n`
+			+ indent(body) + `\nend`;
 	}
 
 	compileScopedAttribute(node: AST.ScopedAttribute) {
@@ -243,6 +271,14 @@ class Compiler {
 
 	compileNilLiteral(node: AST.NilLiteral) {
 		return "nil";
+	}
+
+	compileThisLiteral(node: AST.ThisLiteral) {
+		return "this";
+	}
+
+	compileSuperLiteral(node: AST.SuperLiteral) {
+		return "s.super(this)";
 	}
 
 	compileVarAccess(node: AST.VarAccess) {

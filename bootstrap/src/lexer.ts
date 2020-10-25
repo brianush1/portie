@@ -53,10 +53,8 @@ SYMBOLS.sort((a, b) => b.length - a.length);
 
 const KEYWORDS = [
 	"private", "import", "inline_lua", "nil",
-	"if", "else",
-	"return",
-	"typedef",
-	"const",
+	"if", "else", "return", "typedef", "new",
+	"const", "class", "extends", "this", "super",
 ];
 
 function indexBefore(str: string, i: number) {
@@ -84,7 +82,8 @@ function isWhitespace(s: string) {
 }
 
 export type TokenDescription = ["name" | "keyword" | "symbol", string] | TokenKind;
-export type TokenOf<T> = Token & { kind: T; };
+export type TokenOf<T> = T extends [string, string] ? (Token & { kind: T[0]; value: T[1] })
+	: (Token & { kind: T; });
 
 export function tokenMatches(token: Token, desc: TokenDescription) {
 	if (typeof desc === "string") {

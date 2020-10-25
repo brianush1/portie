@@ -154,6 +154,49 @@ local mt = {
 			return "[" .. table.concat(content, ", ") .. "]"
 		end,
 	},
+	class = {
+		index = function(obj, ...)
+			assert(select("#", ...) > 0, "TypeError")
+			local k = ...
+			local function get(class, k)
+				if class.fields[k] then
+					return obj.fields[k]
+				elseif class.decl[k] then
+					return function(...)
+						return class.decl[k](obj, ...)
+					end
+				elseif class.base then
+					return get(class.base, k)
+				else
+					error("TypeError")
+				end
+			end
+			return get(obj.class, ...)
+		end,
+		newindex = function(obj, val, ...)
+			assert(select("#", ...) > 0, "TypeError")
+			local function set(class, k)
+				if class.fields[k] then
+					obj.fields[k] = val
+				elseif class.base then
+					set(class.base, k)
+				else
+					error("TypeError")
+				end
+			end
+			set(obj.class, ...)
+		end,
+		call = function(obj, ...)
+			if obj.isBase then
+				s.index(obj, "this")(...)
+			else
+				error("TypeError")
+			end
+		end,
+		tostring = function(obj)
+			return "<anonymous class>"
+		end,
+	},
 }
 
 local function tryGetMeta(obj, method)
@@ -169,7 +212,7 @@ end
 
 local function getMeta(obj, method)
 	local result = tryGetMeta(obj, method)
-	assert(result, "TypeError")
+	assert(result, "TypeError: " .. method)
 	return result
 end
 
@@ -243,7 +286,79 @@ function s.tostring(obj)
 	return getMeta(obj, "tostring")(obj)
 end
 
--- literals:
+local Object = {}
+
+Object.fields = {}
+
+Object.decl = {
+	this = function() end,
+}
+
+function s.class(base)
+	local result = {}
+
+	result.fields = {}
+	result.decl = {}
+	if base == nil then
+		result.base = Object
+	else
+		result.base = base
+	end
+
+	return result
+end
+
+function s.super(instance)
+	local result = instance.super
+	if not result then
+		result = {
+			mt = mt.class,
+			fields = instance.fields,
+			class = instance.class.base,
+			isBase = true,
+		}
+		instance.super = result
+	end
+	return result
+end
+
+function s.new(postfields, class, ...)
+	local fields = {}
+	local result = {
+		mt = mt.class,
+		fields = fields,
+		class = class,
+	}
+	local EMPTY = {}
+	for k in pairs(class.fields) do
+		result.fields[k] = EMPTY
+	end
+	local function doFields(class)
+		if class.base then
+			doFields(class.base)
+		end
+		for k, v in pairs(class.fields) do
+			if v ~= "empty" then
+				result.fields[k] = v(result)
+			end
+		end
+	end
+	doFields(class)
+	local i = 1
+	while postfields[i] do
+		local k = postfields[i]
+		local v = postfields[i + 1]
+		s.newindex(result, k, v)
+		i = i + 2
+	end
+	s.index(result, "this")(...)
+	for k in pairs(class.fields) do
+		if result.fields[k] == EMPTY then
+			error("variable '" .. k .. "' has not been initialized", 0)
+		end
+	end
+	return result
+end
 
 function s.table(data)
 	return {
