@@ -2,7 +2,7 @@ local s = {}
 
 local unpack = (_G.unpack or table.unpack)
 
-local mt = {
+local mt mt = {
 	["function"] = {
 		call = function(obj, ...)
 			return obj(...)
@@ -95,39 +95,63 @@ local mt = {
 		end,
 	},
 	array = {
+		["bin.."] = function(lhs, rhs)
+			if lhs.value.fullLength == lhs.length then
+				lhs.value.value[lhs.value.fullLength] = rhs
+				lhs.value.fullLength = lhs.value.fullLength + 1
+				return {
+					mt = mt.array,
+					start = 0,
+					length = lhs.value.fullLength,
+					value = lhs.value,
+				}
+			else
+				local fullLength = lhs.length + 1
+				local newValue = {}
+				for i = 0, fullLength - 2 do
+					newValue[i] = lhs.value.value[lhs.start + i]
+				end
+				newValue[fullLength - 1] = rhs
+				return {
+					mt = mt.array,
+					start = 0,
+					length = fullLength,
+					value = {
+						fullLength = fullLength,
+						value = newValue,
+					},
+				}
+			end
+		end,
 		index = function(obj, ...)
 			assert(select("#", ...) > 0, "TypeError")
-			local k = ...
+			local k, k2 = ...
 			if type(k) == "number" then
-				if k % 1 == 0 and k >= 0 and k < obj.length then
-					return obj.value[k + 1]
+				k = k < 0 and -math.floor(-k) or math.floor(k)
+				if type(k2) == "number" then
+					k2 = k2 < 0 and -math.floor(-k2) or math.floor(k2)
+					if k >= 0 and k < obj.length and k2 >= 0 and k2 < obj.length and k2 >= k then
+						return {
+							mt = mt.array,
+							start = obj.start + k,
+							length = k2 - k,
+							value = obj.value,
+						}
+					else
+						error("out of bounds")
+					end
 				else
-					return nil
+					if k >= 0 and k < obj.length then
+						return obj.value.value[obj.start + k]
+					else
+						error("out of bounds")
+					end
 				end
 			else
-				local methods = {
-					append = function(elem)
-						obj.value[obj.length + 1] = elem
-						obj.length = obj.length + 1
-					end,
-					indexOf = function(elem)
-						for i = 1, obj.length do
-							if s.applyBinOp("==", obj.value[i], elem) then
-								return i - 1
-							end
-						end
-						return nil
-					end,
-					remove = function(index)
-						for i = index + 1, obj.length - 1 do
-							obj.value[i] = obj.value[i + 1]
-						end
-						obj.value[obj.length] = nil
-						obj.length = obj.length - 1
-					end,
+				local members = {
 					length = obj.length,
 				}
-				local result = methods[k]
+				local result = members[k]
 				if result then
 					return result
 				else
@@ -139,8 +163,11 @@ local mt = {
 			assert(select("#", ...) > 0, "TypeError")
 			local k = ...
 			if type(k) == "number" then
-				if k % 1 == 0 then
-					obj.value[k + 1] = val
+				k = k < 0 and -math.floor(-k) or math.floor(k)
+				if k >= 0 and k < obj.length then
+					obj.value.value[obj.start + k] = val
+				else
+					error("out of bounds")
 				end
 			else
 				error("TypeError")
@@ -148,8 +175,8 @@ local mt = {
 		end,
 		tostring = function(obj)
 			local content = {}
-			for i = 1, obj.length do
-				content[i] = s.tostring(obj.value[i])
+			for i = 0, obj.length - 1 do
+				content[i + 1] = s.tostring(obj.value.value[obj.start + i])
 			end
 			return "[" .. table.concat(content, ", ") .. "]"
 		end,
@@ -368,10 +395,18 @@ function s.table(data)
 end
 
 function s.array(length, data)
+	local value = {}
+	for i = 1, length do
+		value[i - 1] = data[i]
+	end
 	return {
 		mt = mt.array,
+		start = 0,
 		length = length,
-		value = data,
+		value = {
+			value = value,
+			fullLength = length,
+		},
 	}
 end
 
