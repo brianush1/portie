@@ -293,6 +293,15 @@ class Compiler {
 		return `s.array(${node.values.length}, {${node.values.map(x => this.compile(x)).join(", ")}})`;
 	}
 
+	compileFuncLiteral(node: AST.FuncLiteral) {
+		this.newEnv();
+		const result = `function(${
+			node.params.map(x => this.env.declare(x.name)).join(", ")})\n`
+			+ indent(this.block(node.body)) + `\nend`;
+		this.exitEnv();
+		return result;
+	}
+
 	compileBinOp(node: AST.BinOp) {
 		return `s.applyBinOp("${node.op}", ${this.compile(node.lhs)}, ${this.compile(node.rhs)})`
 	}

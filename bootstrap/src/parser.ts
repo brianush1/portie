@@ -149,7 +149,8 @@ export namespace AST {
 
 	export type Expr = ExprStat | StrLiteral | NumLiteral
 		| NilLiteral | ThisLiteral | SuperLiteral | VarAccess
-		| TableLiteral | ArrayLiteral | BinOp | UnOp | Index;
+		| TableLiteral | ArrayLiteral | FuncLiteral | BinOp
+		| UnOp | Index;
 
 	export interface StrLiteral {
 		kind: "str-literal";
@@ -199,6 +200,17 @@ export namespace AST {
 		kind: "array-literal";
 		span: Span;
 		values: Expr[];
+	}
+
+	export interface FuncLiteral {
+		kind: "func-literal";
+		span: Span;
+		params: {
+			name: string;
+			type: Type;
+		}[];
+		returnType?: AST.Type;
+		body: Stat[];
 	}
 
 	export type BinOperator =
@@ -278,16 +290,6 @@ const PREFIX_PARSELETS: { [x: string]: PrefixParselet } = {
 	"-": new UnaryParselet(700, "-"),
 	"~": new UnaryParselet(700, "~"),
 	"!": new UnaryParselet(700, "!"),
-
-	"(": new class extends PrefixParselet {
-
-		parse(lexer: Lexer, parser: Parser, token: Token): AST.Expr | undefined {
-			const expr = parser.expr();
-			lexer.next(["symbol", ")"], "expected ')' to close parentheses");
-			return expr;
-		}
-
-	},
 };
 
 abstract class InfixParselet {
@@ -779,6 +781,7 @@ export class Parser {
 	// Expressions:
 
 	atom(): AST.Expr | undefined {
+		const startState = this.lexer.save();
 		let token;
 		if (token = this.lexer.tryNext("string")) {
 			return {
@@ -923,6 +926,48 @@ export class Parser {
 				span: token.span,
 				values,
 			};
+		}
+		else if (token = this.lexer.tryNext(["symbol", "("])) {
+			let count = 1;
+			while (count > 0 && !this.lexer.eof()) {
+				if (this.lexer.tryNext(["symbol", "("])) {
+					count++;
+				}
+				else if (this.lexer.tryNext(["symbol", ")"])) {
+					count--;
+				}
+				else {
+					this.lexer.next();
+				}
+			}
+			let isFunction = true;
+			if (this.lexer.tryNext(["symbol", ":"])) {
+				const type = this.type();
+				if (!type) {
+					isFunction = false;
+				}
+			}
+			isFunction &&= this.lexer.isNext(["symbol", "{"]);
+			this.lexer.restore(startState);
+			if (!isFunction) {
+				this.lexer.next();
+				const value = this.exprOrNil();
+				this.lexer.next(["symbol", ")"], "expected ')' to close parentheses");
+				return value;
+			}
+			else {
+				const func = this.func();
+				if (func === undefined) {
+					return undefined;
+				}
+				return {
+					kind: "func-literal",
+					span: combineSpans(token.span, func.span),
+					body: func.body,
+					params: func.params,
+					returnType: func.returnType,
+				};
+			}
 		}
 		else {
 			this.diagnostics.push({

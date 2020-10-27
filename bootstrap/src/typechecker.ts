@@ -373,6 +373,17 @@ class Typechecker {
 		}
 	}
 
+	checkFuncLiteral(node: AST.FuncLiteral) {
+		this.newEnv();
+		for (const param of node.params) {
+			this.env.declare(node.span, param.name, true);
+		}
+		for (const stat of node.body) {
+			this.check(stat);
+		}
+		this.exitEnv();
+	}
+
 	checkBinOp(node: AST.BinOp) {
 		this.check(node.lhs);
 		this.check(node.rhs);
