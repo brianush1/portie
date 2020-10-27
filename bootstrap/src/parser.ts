@@ -668,7 +668,20 @@ export class Parser {
 		if (this.lexer.tryNext(["symbol", ":"])) {
 			returnType = this.type();
 		}
-		const body = this.body("function");
+		let body: AST.Stat[];
+		let arrowToken;
+		if (arrowToken = this.lexer.tryNext(["symbol", "=>"])) {
+			body = [
+				{
+					kind: "return",
+					span: arrowToken.span,
+					value: this.exprOrNil(),
+				},
+			];
+		}
+		else {
+			body = this.body("function");
+		}
 		return {
 			span: combineSpans(start.span, this.lexer.last().span),
 			body, params, returnType,
@@ -947,7 +960,7 @@ export class Parser {
 					isFunction = false;
 				}
 			}
-			isFunction &&= this.lexer.isNext(["symbol", "{"]);
+			isFunction &&= this.lexer.isNext(["symbol", "{"]) || this.lexer.isNext(["symbol", "=>"]);
 			this.lexer.restore(startState);
 			if (!isFunction) {
 				this.lexer.next();
