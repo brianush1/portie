@@ -65,7 +65,7 @@ local mt mt = {
 	},
 	boolean = {
 		tostring = function(obj)
-			return obj
+			return tostring(obj)
 		end,
 	},
 	["nil"] = {
@@ -150,9 +150,11 @@ local mt mt = {
 			else
 				local members = {
 					length = obj.length,
+					isArray = obj.length == obj.value.fullLength,
+					isSlice = obj.length ~= obj.value.fullLength,
 				}
 				local result = members[k]
-				if result then
+				if result ~= nil then
 					return result
 				else
 					error("TypeError")
