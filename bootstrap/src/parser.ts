@@ -247,7 +247,8 @@ export namespace AST {
 
 	// Types:
 
-	export type Type = NamedType | NilType;
+	export type Type = NamedType | NilType | TypeStrLiteral
+		| TypeNumLiteral | ComplementType | BinTypeOp | TypeIndex;
 
 	export interface NamedType {
 		kind: "named-type";
@@ -258,6 +259,41 @@ export namespace AST {
 	export interface NilType {
 		kind: "nil-type";
 		span: Span;
+	}
+
+	export interface TypeStrLiteral {
+		kind: "type-str-literal";
+		span: Span;
+		value: string;
+	}
+
+	export interface TypeNumLiteral {
+		kind: "type-num-literal";
+		span: Span;
+		value: number;
+	}
+
+	export interface ComplementType {
+		kind: "complement-type";
+		span: Span;
+		value: Type;
+	}
+
+	export type BinTypeOperator = "|" | "^" | "&";
+
+	export interface BinTypeOp {
+		kind: "bin-type-op";
+		span: Span;
+		op: BinTypeOperator;
+		lhs: Type;
+		rhs: Type;
+	}
+
+	export interface TypeIndex {
+		kind: "type-index";
+		span: Span;
+		base: Type;
+		args: Type[];
 	}
 
 }
@@ -429,6 +465,84 @@ const INFIX_PARSELETS: { [x: string]: InfixParselet } = {
 				base: lhs,
 				func,
 				args,
+			};
+		}
+	}(800),
+};
+
+abstract class InfixTypeParselet {
+
+	constructor(public precedence: number) { }
+
+	abstract parse(lhs: AST.Type, lexer: Lexer, parser: Parser, token: Token): AST.Type | undefined;
+
+}
+
+class BinaryTypeParselet extends InfixTypeParselet {
+
+	constructor(precedence: number, public op: AST.BinTypeOperator, public assoc: "left" | "right") {
+		super(precedence);
+	}
+
+	parse(lhs: AST.Type, lexer: Lexer, parser: Parser, token: Token): AST.Type | undefined {
+		const rhs = parser.type(this.precedence + (this.assoc === "left" ? 1 : 0));
+		return rhs ? {
+			kind: "bin-type-op",
+			span: combineSpans(lhs.span, lexer.last().span),
+			op: this.op,
+			lhs, rhs,
+		} : rhs;
+	}
+
+}
+
+const INFIX_TYPE_PARSELETS: { [x: string]: InfixTypeParselet } = {
+	"|": new BinaryTypeParselet(100, "|", "left"),
+
+	"^": new BinaryTypeParselet(150, "^", "left"),
+
+	"&": new BinaryTypeParselet(200, "&", "left"),
+
+	"[": new class extends InfixTypeParselet {
+		parse(lhs: AST.Type, lexer: Lexer, parser: Parser, token: Token): AST.Type | undefined {
+			const args: AST.Type[] = [];
+			while (lexer.until(["symbol", "]"])) {
+				const type = parser.type();
+				if (type) {
+					args.push(type);
+				}
+				if (!lexer.tryNext(["symbol", ","])) {
+					break;
+				}
+			}
+			lexer.next(["symbol", "]"], "expected ']' to close index");
+			return {
+				kind: "type-index",
+				span: combineSpans(lhs.span, lexer.last().span),
+				base: lhs,
+				args,
+			};
+		}
+	}(800),
+
+	".": new class extends InfixTypeParselet {
+		parse(lhs: AST.Type, lexer: Lexer, parser: Parser, token: Token): AST.Type | undefined {
+			const keyToken = lexer.next("name", "expected name in index");
+			if (!keyToken) {
+				return undefined;
+			}
+			const key = keyToken.value;
+			return {
+				kind: "type-index",
+				span: combineSpans(lhs.span, lexer.last().span),
+				base: lhs,
+				args: [
+					{
+						kind: "type-str-literal",
+						span: keyToken.span,
+						value: key,
+					},
+				],
 			};
 		}
 	}(800),
@@ -1058,7 +1172,7 @@ export class Parser {
 
 	// Types:
 
-	type(): AST.Type | undefined {
+	typeAtom(): AST.Type | undefined {
 		let token;
 		if (token = this.lexer.tryNext("name")) {
 			return {
@@ -1073,6 +1187,17 @@ export class Parser {
 				span: token.span,
 			};
 		}
+		else if (token = this.lexer.tryNext(["symbol", "~"])) {
+			const value = this.type(700);
+			if (!value) {
+				return undefined;
+			}
+			return {
+				kind: "complement-type",
+				span: combineSpans(token.span, value.span),
+				value: value,
+			};
+		}
 		else {
 			this.diagnostics.push({
 				kind: "error",
@@ -1081,6 +1206,39 @@ export class Parser {
 			});
 			return undefined;
 		}
+	}
+
+	peekInfixTypeParselet(): InfixTypeParselet | undefined {
+		if (this.lexer.isNext("symbol")) {
+			const value = (this.lexer.peek() as TokenOf<"symbol">).value;
+			return INFIX_TYPE_PARSELETS[value];
+		}
+		else {
+			return undefined;
+		}
+	}
+
+	type(precedence: number = 0): AST.Type | undefined {
+		let lhs = this.typeAtom();
+		if (!lhs) {
+			return undefined;
+		}
+
+		while (true) {
+			const parselet = this.peekInfixTypeParselet();
+			if (parselet === undefined || parselet.precedence < precedence) {
+				break;
+			}
+			const type = parselet.parse(lhs, this.lexer, this, this.lexer.next());
+			if (type !== undefined) {
+				lhs = type;
+			}
+			else {
+				break;
+			}
+		}
+
+		return lhs;
 	}
 
 }

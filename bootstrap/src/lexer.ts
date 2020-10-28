@@ -33,8 +33,11 @@ const SYMBOLS = [
 	// Relational operators:
 	"<", ">", "<=", ">=", "==", "!=",
 
+	// Set operators:
+	"~", "&", "|", "^",
+
 	// Bitwise operators:
-	"~", "&", "|", "^", "<<", ">>", ">>>",
+	"<<", ">>", ">>>",
 
 	// Boolean operators:
 	"!", "&&", "||",
