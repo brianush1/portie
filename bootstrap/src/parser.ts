@@ -1181,6 +1181,20 @@ export class Parser {
 				name: token.value,
 			};
 		}
+		else if (token = this.lexer.tryNext("string")) {
+			return {
+				kind: "type-str-literal",
+				span: token.span,
+				value: token.value,
+			};
+		}
+		else if (token = this.lexer.tryNext("integer")) {
+			return {
+				kind: "type-num-literal",
+				span: token.span,
+				value: Number(token.value),
+			};
+		}
 		else if (token = this.lexer.tryNext(["keyword", "nil"])) {
 			return {
 				kind: "nil-type",
