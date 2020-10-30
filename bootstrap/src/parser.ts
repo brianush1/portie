@@ -28,7 +28,7 @@ export namespace AST {
 
 	// Expression statements:
 
-	export type ExprStat = FuncCall | NewCall | PipeCall;
+	export type ExprStat = FuncCall | NewCall | PipeCall | InlineLua;
 
 	export interface FuncCall {
 		kind: "func-call";
@@ -60,7 +60,7 @@ export namespace AST {
 	// Statements:
 
 	export type Stat = Decl | ExprStat
-		| If | While | Return | InlineLua
+		| If | While | Return
 		| Assign;
 
 	export interface If {
@@ -693,24 +693,12 @@ export class Parser {
 				value,
 			};
 		}
-		else if (this.lexer.tryNext(["keyword", "inline_lua"])) {
-			const value = this.lexer.next("string", "expected string")?.value;
-			this.semi();
-			if (!value) {
-				return undefined;
-			}
-			return {
-				kind: "inline-lua",
-				span: combineSpans(start.span, this.lexer.last().span),
-				value,
-			}
-		}
 		else {
 			const state = this.lexer.save();
 			const stat = this.expr();
 			if (this.lexer.tryNext(["symbol", ";"])) {
 				if (stat?.kind === "func-call" || stat?.kind === "pipe-call"
-					|| stat?.kind === "new-call") {
+					|| stat?.kind === "new-call" || stat?.kind === "inline-lua") {
 					return stat;
 				}
 				else if (stat === undefined) {
@@ -908,6 +896,7 @@ export class Parser {
 	// Expressions:
 
 	atom(): AST.Expr | undefined {
+		const start = this.lexer.peek();
 		const startState = this.lexer.save();
 		let token;
 		if (token = this.lexer.tryNext("string")) {
@@ -984,6 +973,17 @@ export class Parser {
 				kind: "new-call",
 				span: combineSpans(token.span),
 				classObj, args, fields,
+			};
+		}
+		else if (this.lexer.tryNext(["keyword", "inline_lua"])) {
+			const value = this.lexer.next("string", "expected string")?.value;
+			if (!value) {
+				return undefined;
+			}
+			return {
+				kind: "inline-lua",
+				span: combineSpans(start.span, this.lexer.last().span),
+				value,
 			};
 		}
 		else if (token = this.lexer.tryNext("name")) {
