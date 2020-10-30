@@ -328,6 +328,17 @@ class Compiler {
 		return `s.index(${[node.base, ...node.args].map(x => this.compile(x)).join(", ")})`;
 	}
 
+	compileIfExpr(node: AST.IfExpr) {
+		this.newEnv();
+		let result = this.condition(node.cond, "if $ then\n");
+		result += indent("return " + this.compile(node.value));
+		result += "\nelse\n";
+		result += indent("return " + this.compile(node.elseValue));
+		result += "\nend" + this.closeCondition(node.cond);
+		this.exitEnv();
+		return `(function()\n${indent(result)}\nend)()`;
+	}
+
 }
 
 export function compile(ast: AST.File): string {

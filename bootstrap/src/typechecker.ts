@@ -410,6 +410,14 @@ class Typechecker {
 		}
 	}
 
+	checkIfExpr(node: AST.IfExpr) {
+		this.newEnv();
+		this.checkCondition(node.cond);
+		this.check(node.value);
+		this.check(node.elseValue);
+		this.exitEnv();
+	}
+
 }
 
 export function typecheck(ast: AST.File, diagnostics: Diagnostic[]): TypecheckerResult {

@@ -159,7 +159,7 @@ export namespace AST {
 	export type Expr = ExprStat | StrLiteral | NumLiteral
 		| NilLiteral | ThisLiteral | SuperLiteral | VarAccess
 		| TableLiteral | ArrayLiteral | FuncLiteral | BinOp
-		| UnOp | Index;
+		| UnOp | Index | IfExpr;
 
 	export interface StrLiteral {
 		kind: "str-literal";
@@ -252,6 +252,14 @@ export namespace AST {
 		span: Span;
 		base: Expr;
 		args: Expr[];
+	}
+
+	export interface IfExpr {
+		kind: "if-expr";
+		span: Span;
+		cond: Condition;
+		value: Expr;
+		elseValue: Expr;
 	}
 
 	// Types:
@@ -847,17 +855,21 @@ export class Parser {
 				if (name && this.lexer.tryNext(["symbol", ":"])
 					&& !this.lexer.tryNext(["symbol", "="])) {
 					const type = this.type();
-					this.semi();
-					if (type !== undefined) {
-						body.push({
-							kind: "empty-var-decl",
-							span: combineSpans(name.span, this.lexer.last().span),
-							isConst,
-							name: name.value,
-							type,
-						});
+					if (!this.lexer.tryNext(["symbol", ";"])) {
+						this.lexer.restore(state);
 					}
-					continue;
+					else {
+						if (type !== undefined) {
+							body.push({
+								kind: "empty-var-decl",
+								span: combineSpans(name.span, this.lexer.last().span),
+								isConst,
+								name: name.value,
+								type,
+							});
+						}
+						continue;
+					}
 				}
 				else {
 					this.lexer.restore(state);
@@ -939,6 +951,17 @@ export class Parser {
 				kind: "num-literal",
 				span: token.span,
 				value: Number(token.value),
+			};
+		}
+		else if (this.lexer.tryNext(["keyword", "if"])) {
+			const cond = this.condition();
+			const value = this.exprOrNil();
+			this.lexer.next(["keyword", "else"], "expected 'else' in 'if' expression");
+			const elseValue = this.exprOrNil();
+			return {
+				kind: "if-expr",
+				span: combineSpans(start.span, this.lexer.last().span),
+				cond, value, elseValue,
 			};
 		}
 		else if (token = this.lexer.tryNext(["keyword", "nil"])) {
