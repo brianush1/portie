@@ -1037,7 +1037,7 @@ export class Parser {
 		}
 		else if (token = this.lexer.tryNext(["symbol", "["])) {
 			const values: AST.Expr[] = [];
-			while (this.lexer.until(["symbol", "}"])) {
+			while (this.lexer.until(["symbol", "]"])) {
 				const value = this.exprOrNil();
 				values.push(value);
 				if (this.lexer.isNext(["symbol", ","])) {
