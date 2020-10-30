@@ -123,7 +123,7 @@ class Compiler {
 			}
 		}
 		for (const publicDecl of this.publicDecls) {
-			program.push(`exports.${publicDecl} = ${this.env.get(publicDecl)}`);
+			program.push(`exports["${publicDecl}"] = ${this.env.get(publicDecl)}`);
 			if (publicDecl === "main") {
 				program.push(`${this.env.get(publicDecl)}()`);
 			}
@@ -212,10 +212,10 @@ class Compiler {
 		});
 		const body = node.body.map(x => {
 			if (x.kind === "var-decl") {
-				return `${name}.fields.${x.name} = function(this) return ${this.compile(x.value)} end`;
+				return `${name}.fields["${x.name}"] = function(this) return ${this.compile(x.value)} end`;
 			}
 			else if (x.kind === "empty-var-decl") {
-				return `${name}.fields.${x.name} = "empty"`;
+				return `${name}.fields["${x.name}"] = "empty"`;
 			}
 			else if (x.kind === "func-decl") {
 				this.env.declare(x.name);
