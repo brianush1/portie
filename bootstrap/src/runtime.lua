@@ -91,7 +91,7 @@ local mt mt = {
 				while true do
 					i = i + 1
 					local c = obj:byte(i + 1)
-					if i >= #obj or s.applyBinOp("&", c, 192) ~= 128 or c <= 127 then
+					if i >= #obj or c == nil or s.applyBinOp("&", c, 192) ~= 128 or c <= 127 then
 						break
 					end
 				end
@@ -101,7 +101,7 @@ local mt mt = {
 				while true do
 					i = i - 1
 					local c = obj:byte(i + 1)
-					if i <= 0 or s.applyBinOp("&", c, 192) ~= 128 or c <= 127 then
+					if i <= 0 or c == nil or s.applyBinOp("&", c, 192) ~= 128 or c <= 127 then
 						break
 					end
 				end
@@ -131,12 +131,14 @@ local mt mt = {
 				end
 			elseif type(k) == "number" then
 				if type(k2) == "number" then
-					error("TypeError")
+					local from = prev(k + 1)
+					local to = next(k2 - 1)
+					return obj:sub(from + 1, to)
 				else
 					local i = k
 					while true do
 						local c = obj:byte(i + 1)
-						if i <= 0 or s.applyBinOp("&", c, 192) ~= 128 or c <= 127 then
+						if i <= 0 or c == nil or s.applyBinOp("&", c, 192) ~= 128 or c <= 127 then
 							break
 						end
 						i = i - 1
