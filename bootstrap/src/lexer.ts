@@ -56,7 +56,7 @@ SYMBOLS.sort((a, b) => b.length - a.length);
 
 const KEYWORDS = [
 	"private", "import", "inline_lua", "nil",
-	"if", "else", "return", "typedef", "new",
+	"if", "while", "else", "return", "typedef", "new",
 	"const", "class", "extends", "this", "super",
 ];
 
