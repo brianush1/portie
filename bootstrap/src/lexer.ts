@@ -58,6 +58,7 @@ const KEYWORDS = [
 	"private", "import", "inline_lua", "nil",
 	"if", "while", "else", "return", "typedef", "new",
 	"const", "class", "extends", "this", "super", "for",
+	"true", "false",
 ];
 
 function indexBefore(str: string, i: number) {

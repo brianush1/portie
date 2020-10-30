@@ -287,6 +287,10 @@ class Compiler {
 		return "nil";
 	}
 
+	compileBoolLiteral(node: AST.BoolLiteral) {
+		return node.value ? "true" : "false";
+	}
+
 	compileThisLiteral(node: AST.ThisLiteral) {
 		return "this";
 	}

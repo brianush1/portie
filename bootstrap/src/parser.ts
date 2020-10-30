@@ -157,9 +157,9 @@ export namespace AST {
 	// Expressions:
 
 	export type Expr = ExprStat | StrLiteral | NumLiteral
-		| NilLiteral | ThisLiteral | SuperLiteral | VarAccess
-		| TableLiteral | ArrayLiteral | FuncLiteral | BinOp
-		| UnOp | Index | IfExpr;
+		| NilLiteral | BoolLiteral | ThisLiteral | SuperLiteral
+		| VarAccess | TableLiteral | ArrayLiteral | FuncLiteral
+		| BinOp | UnOp | Index | IfExpr;
 
 	export interface StrLiteral {
 		kind: "str-literal";
@@ -176,6 +176,12 @@ export namespace AST {
 	export interface NilLiteral {
 		kind: "nil-literal";
 		span: Span;
+	}
+
+	export interface BoolLiteral {
+		kind: "bool-literal";
+		span: Span;
+		value: boolean;
 	}
 
 	export interface ThisLiteral {
@@ -968,6 +974,20 @@ export class Parser {
 			return {
 				kind: "nil-literal",
 				span: combineSpans(token.span),
+			};
+		}
+		else if (token = this.lexer.tryNext(["keyword", "true"])) {
+			return {
+				kind: "bool-literal",
+				span: combineSpans(token.span),
+				value: true,
+			};
+		}
+		else if (token = this.lexer.tryNext(["keyword", "false"])) {
+			return {
+				kind: "bool-literal",
+				span: combineSpans(token.span),
+				value: false,
 			};
 		}
 		else if (token = this.lexer.tryNext(["keyword", "this"])) {

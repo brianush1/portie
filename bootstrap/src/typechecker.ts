@@ -341,6 +341,8 @@ class Typechecker {
 
 	checkNilLiteral(node: AST.NilLiteral) {}
 
+	checkBoolLiteral(node: AST.BoolLiteral) {}
+
 	checkThisLiteral(node: AST.ThisLiteral) {
 		if (!this.env.get("this")) {
 			this.diagnostics.push({
