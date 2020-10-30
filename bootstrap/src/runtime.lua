@@ -113,6 +113,10 @@ local mt mt = {
 				return next
 			elseif k == "prev" then
 				return prev
+			elseif k == "includes" then
+				return function(s)
+					return obj:find(s, 1, true) ~= nil
+				end
 			elseif k == "popFront" then
 				return function()
 					return obj:sub(next(0) + 1)
