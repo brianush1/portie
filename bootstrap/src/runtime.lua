@@ -59,6 +59,13 @@ local mt mt = {
 		["bin=="] = function(lhs, rhs)
 			return lhs == rhs
 		end,
+		index = function(obj, k)
+			if k == "length" then
+				return #obj
+			else
+				error("TypeError")
+			end
+		end,
 		tostring = function(obj)
 			return obj
 		end,
@@ -152,6 +159,35 @@ local mt mt = {
 					length = obj.length,
 					isArray = obj.length == obj.value.fullLength,
 					isSlice = obj.length ~= obj.value.fullLength,
+					sort = function(func)
+						if not func then
+							func = function(a, b) return s.applyBinOp("<", a, b) end
+						end
+
+						local function partition(arr, low, high)
+							local pivot = arr[high]
+							local i = low - 1
+							for j = low, high - 1 do
+								if func(arr[j], pivot) then
+									i = i + 1
+									arr[i], arr[j] = arr[j], arr[i]
+								end
+							end
+							arr[i + 1], arr[high] = arr[high], arr[i + 1]
+							return i + 1
+						end
+
+						local function quickSort(arr, low, high)
+							if low < high then
+								local pi = partition(arr, low, high)
+								quickSort(arr, low, pi - 1)
+								quickSort(arr, pi + 1, high)
+							end
+						end
+
+						quickSort(obj.value.value, obj.start, obj.start + obj.length - 1)
+						return obj
+					end,
 				}
 				local result = members[k]
 				if result ~= nil then
