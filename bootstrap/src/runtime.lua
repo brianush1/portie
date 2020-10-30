@@ -2,6 +2,15 @@ local s = {}
 
 local unpack = (_G.unpack or table.unpack)
 
+local function bitop(a, b, oper)
+	local r, m, s = 0, 2^52
+	repeat
+		s, a, b = a + b + m, a % m, b % m
+		r, m = r + m * oper % (s - a - b), m / 2
+	until m < 1
+	return r
+end
+
 local mt mt = {
 	["function"] = {
 		call = function(obj, ...)
@@ -36,6 +45,24 @@ local mt mt = {
 		["bin%"] = function(lhs, rhs)
 			return lhs % rhs
 		end,
+		["bin**"] = function(lhs, rhs)
+			return lhs ^ rhs
+		end,
+		["bin|"] = function(lhs, rhs)
+			return bitop(math.floor(lhs), math.floor(rhs), 1)
+		end,
+		["bin&"] = function(lhs, rhs)
+			return bitop(math.floor(lhs), math.floor(rhs), 4)
+		end,
+		["bin^"] = function(lhs, rhs)
+			return bitop(math.floor(lhs), math.floor(rhs), 3)
+		end,
+		["bin<<"] = function(lhs, rhs)
+			return math.floor(lhs) * 2 ^ math.floor(rhs)
+		end,
+		["bin>>"] = function(lhs, rhs)
+			return math.floor(math.floor(lhs) / 2 ^ math.floor(rhs))
+		end,
 		["un-"] = function(obj)
 			return -obj
 		end,
@@ -59,9 +86,59 @@ local mt mt = {
 		["bin=="] = function(lhs, rhs)
 			return lhs == rhs
 		end,
-		index = function(obj, k)
-			if k == "length" then
+		index = function(obj, k, k2)
+			local function next(i)
+				while true do
+					i = i + 1
+					local c = obj:byte(i + 1)
+					if i >= #obj or s.applyBinOp("&", c, 192) ~= 128 or c <= 127 then
+						break
+					end
+				end
+				return i
+			end
+			local function prev(i)
+				while true do
+					i = i - 1
+					local c = obj:byte(i + 1)
+					if i <= 0 or s.applyBinOp("&", c, 192) ~= 128 or c <= 127 then
+						break
+					end
+				end
+				return i
+			end
+			if k == "byteLength" then
 				return #obj
+			elseif k == "next" then
+				return next
+			elseif k == "prev" then
+				return prev
+			elseif k == "popFront" then
+				return function()
+					return obj:sub(next(0) + 1)
+				end
+			elseif k == "front" then
+				return function()
+					return obj:sub(1, next(0))
+				end
+			elseif k == "empty" then
+				return function()
+					return #obj == 0
+				end
+			elseif type(k) == "number" then
+				if type(k2) == "number" then
+					error("TypeError")
+				else
+					local i = k
+					while true do
+						local c = obj:byte(i + 1)
+						if i <= 0 or s.applyBinOp("&", c, 192) ~= 128 or c <= 127 then
+							break
+						end
+						i = i - 1
+					end
+					return obj:sub(i + 1, next(i))
+				end
 			else
 				error("TypeError")
 			end

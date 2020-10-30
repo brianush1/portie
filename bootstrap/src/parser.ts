@@ -60,7 +60,7 @@ export namespace AST {
 	// Statements:
 
 	export type Stat = Decl | ExprStat
-		| If | While | Return
+		| If | While | For | Return
 		| Assign;
 
 	export interface If {
@@ -75,6 +75,15 @@ export namespace AST {
 		kind: "while";
 		span: Span;
 		cond: Condition;
+		body: Stat[];
+	}
+
+	export interface For {
+		kind: "for";
+		span: Span;
+		name: string;
+		type?: Type;
+		value: Expr;
 		body: Stat[];
 	}
 
@@ -679,6 +688,25 @@ export class Parser {
 				kind: "while",
 				span: combineSpans(start.span, this.lexer.last().span),
 				cond, body,
+			};
+		}
+		else if (this.lexer.tryNext(["keyword", "for"])) {
+			this.lexer.next(["symbol", "("], "expected '(' to open for statement");
+			const name = this.lexer.next("name", "expected name in for statement")?.value;
+			if (!name) {
+				return undefined;
+			}
+			this.lexer.next(["symbol", ":"], "expected ':' in for statement");
+			const type = this.lexer.isNext(["symbol", "="]) ? undefined : this.type();
+			this.lexer.next(["symbol", "="], "expected '=' in for statement");
+			this.lexer.next(["symbol", "..."], "expected '...' in for statement");
+			const value = this.exprOrNil();
+			this.lexer.next(["symbol", ")"], "expected ')' to close for statement");
+			const body = this.body("for");
+			return {
+				kind: "for",
+				span: combineSpans(start.span, this.lexer.last().span),
+				name, type, value, body,
 			};
 		}
 		else if (this.lexer.tryNext(["keyword", "return"])) {

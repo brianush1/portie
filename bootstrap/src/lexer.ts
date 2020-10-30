@@ -49,7 +49,7 @@ const SYMBOLS = [
 	".", ";", ":", "=>", "->",
 
 	// Miscellaneous:
-	"..",
+	"..", "...",
 ];
 
 SYMBOLS.sort((a, b) => b.length - a.length);
@@ -57,7 +57,7 @@ SYMBOLS.sort((a, b) => b.length - a.length);
 const KEYWORDS = [
 	"private", "import", "inline_lua", "nil",
 	"if", "while", "else", "return", "typedef", "new",
-	"const", "class", "extends", "this", "super",
+	"const", "class", "extends", "this", "super", "for",
 ];
 
 function indexBefore(str: string, i: number) {

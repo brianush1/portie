@@ -223,6 +223,16 @@ class Typechecker {
 		this.exitEnv();
 	}
 
+	checkFor(node: AST.For) {
+		this.newEnv();
+		this.check(node.value);
+		this.env.declare(node.span, node.name, true);
+		for (const stat of node.body) {
+			this.check(stat);
+		}
+		this.exitEnv();
+	}
+
 	checkReturn(node: AST.Return) {
 		if (node.value) {
 			this.check(node.value);

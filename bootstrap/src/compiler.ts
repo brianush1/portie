@@ -167,6 +167,20 @@ class Compiler {
 		return result;
 	}
 
+	compileFor(node: AST.For) {
+		this.newEnv();
+		const varName = this.env.declare(node.name);
+		let result = `do\n\tlocal range, elem = ${this.compile(node.value)}\n`
+			+ `\twhile not s.call(s.index(range, "empty")) do\n`
+			+ `\t\telem = s.call(s.index(range, "front"))\n`
+			+ `\t\trange = s.call(s.index(range, "popFront"))\n`
+			+ `\t\tlocal ${varName} = elem;\n`;
+		result += indent(indent(this.block(node.body)));
+		result += "\n\tend\nend";
+		this.exitEnv();
+		return result;
+	}
+
 	compileReturn(node: AST.Return) {
 		if (node.value) {
 			return `return ${this.compile(node.value)}`;
