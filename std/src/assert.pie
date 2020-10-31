@@ -1,0 +1,3 @@
+assert(cond: any, msg: string = "Assertion failed") {
+	inline_lua "assert(s.toBool(c_cond), s.tostring(c_msg))";
+}
