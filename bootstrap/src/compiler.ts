@@ -355,7 +355,16 @@ class Compiler {
 	}
 
 	compileBinOp(node: AST.BinOp) {
-		return `s.applyBinOp("${node.op}", ${this.compile(node.lhs)}, ${this.compile(node.rhs)})`
+		// TODO: use s.toBool?
+		if (node.op === "&&") {
+			return `(${this.compile(node.lhs)} and ${this.compile(node.rhs)})`;
+		}
+		else if (node.op === "||") {
+			return `(${this.compile(node.lhs)} or ${this.compile(node.rhs)})`;
+		}
+		else {
+			return `s.applyBinOp("${node.op}", ${this.compile(node.lhs)}, ${this.compile(node.rhs)})`;
+		}
 	}
 
 	compileUnOp(node: AST.UnOp) {

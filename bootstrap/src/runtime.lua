@@ -386,19 +386,7 @@ function s.toBool(value)
 end
 
 function s.applyBinOp(op, lhs, rhs)
-	if op == "||" then
-		if s.toBool(lhs) then
-			return lhs
-		else
-			return rhs
-		end
-	elseif op == "&&" then
-		if s.toBool(lhs) then
-			return rhs
-		else
-			return lhs
-		end
-	elseif op == "==" then
+	if op == "==" then
 		local meta = tryGetMeta(lhs, "bin==")
 		if meta then
 			return meta(lhs, rhs)
@@ -417,6 +405,9 @@ function s.applyBinOp(op, lhs, rhs)
 end
 
 function s.applyUnOp(op, value)
+	if op == "!" then
+		return not s.toBool(value)
+	end
 	return getMeta(value, "un" .. op)(value)
 end
 
