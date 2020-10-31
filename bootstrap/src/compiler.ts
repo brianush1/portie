@@ -237,10 +237,7 @@ class Compiler {
 			else if (x.kind === "func-decl") {
 				this.env.declare(x.name);
 				this.newEnv();
-				// const result = `function ${this.env.get(x.name)}(${
-				// 	["this", ...x.params.map(x => this.env.declare(x.name))].join(", ")})\n`
-				// 	+ indent(this.block(x.body)) + `\nend`;
-				const result = `${this.env.get(x.name)} = ${this.compileFuncLiteral({
+				const result = `${name}.decl["${x.name}"] = ${this.compileFuncLiteral({
 					...x,
 					kind: "func-literal",
 				}, ["this"])}`;
