@@ -1,0 +1,7 @@
+min(a: num, b: num) {
+	return if (a < b) a else b;
+}
+
+max(a: num, b: num) {
+	return if (a > b) a else b;
+}
