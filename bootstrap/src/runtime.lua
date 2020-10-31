@@ -242,6 +242,14 @@ local mt mt = {
 					length = obj.length,
 					isArray = obj.length == obj.value.fullLength,
 					isSlice = obj.length ~= obj.value.fullLength,
+					includes = function(entry)
+						for i = 0, obj.length - 1 do
+							if s.toBool(s.applyBinOp("==", obj.value.value[obj.start + i], entry)) then
+								return true
+							end
+						end
+						return false
+					end,
 					sort = function(func)
 						if not func then
 							func = function(a, b) return s.applyBinOp("<", a, b) end
