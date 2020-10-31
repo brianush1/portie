@@ -252,6 +252,23 @@ local mt mt = {
 					length = obj.length,
 					isArray = obj.length == obj.value.fullLength,
 					isSlice = obj.length ~= obj.value.fullLength,
+					popFront = function()
+						if obj.length == 0 then
+							return obj
+						end
+						return {
+							mt = mt.array,
+							start = obj.start + 1,
+							length = obj.length - 1,
+							value = obj.value
+						}
+					end,
+					empty = function()
+						return obj.length == 0
+					end,
+					front = function()
+						return obj.value.value[obj.start]
+					end,
 					includes = function(entry)
 						for i = 0, obj.length - 1 do
 							if s.toBool(s.applyBinOp("==", obj.value.value[obj.start + i], entry)) then
