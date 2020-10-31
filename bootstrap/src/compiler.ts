@@ -277,7 +277,7 @@ class Compiler {
 
 	compileStrLiteral(node: AST.StrLiteral) {
 		return "\"" + [...new TextEncoder().encode(node.value)].map(x => {
-			if (x >= 32 && x <= 126) {
+			if (x >= 32 && x <= 126 && x !== 34 && x !== 92) {
 				return String.fromCodePoint(x);
 			}
 			else {
