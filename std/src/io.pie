@@ -7,3 +7,35 @@ print(s: unknown): nil {
 println(s: unknown): nil {
 	print(toString(s) .. "\n");
 }
+
+class File {
+
+	this(name: string, mode: string | nil) {
+		effectiveMode := mode;
+		if !(mode) {
+			effectiveMode = "r";
+		}
+		inline_lua "local file, err = io.open(c_name, c_effectiveMode)";
+		if (inline_lua "file == nil") {
+			inline_lua "error(err)";
+		}
+		else {
+			this.fileHandle = inline_lua "file";
+		}
+	}
+
+	write(data: string) {
+		file := this.fileHandle;
+		inline_lua "c_file:write(c_data)";
+	}
+
+	readAllText() {
+		file := this.fileHandle;
+		return inline_lua "c_file:read('*a')";
+	}
+
+private:
+
+	fileHandle: unknown;
+
+}
