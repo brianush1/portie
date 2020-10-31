@@ -149,7 +149,11 @@ local mt mt = {
 						end
 						i = i - 1
 					end
-					return obj:sub(i + 1, next(i))
+					local result = obj:sub(i + 1, next(i))
+					if #result == 0 then
+						return nil
+					end
+					return result
 				end
 			else
 				error("TypeError")
