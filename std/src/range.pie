@@ -1,0 +1,30 @@
+range(start: num, end: num) {
+	return new NumberRange {
+		start = start,
+		end = end,
+	};
+}
+
+private:
+
+class NumberRange {
+
+	start: num;
+	end: num;
+
+	popFront() {
+		return new NumberRange {
+			start = this.start + 1,
+			end = this.end,
+		};
+	}
+
+	empty() {
+		return this.start >= this.end;
+	}
+
+	front() {
+		return this.start;
+	}
+
+}
