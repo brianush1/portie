@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import { mkdirSync, readdirSync, readFile, readFileSync, rmdirSync, writeFileSync } from "fs";
 import { compile } from "./compiler";
 import { Diagnostic } from "./diagnostic";
@@ -94,15 +94,7 @@ else if (args[0] === "run") {
 	const project = loadProject();
 	const success = buildProject(project);
 	if (success) {
-		exec(`./${project.name}`, (error, stdout, stderr) => {
-			if (error) {
-				console.error(error);
-				return;
-			}
-	
-			process.stdout.write(stdout);
-			process.stderr.write(stderr);
-		});
+		spawn(`./${project.name}`, [], { stdio: "inherit" });
 	}
 	else {
 		console.error("Build failed.");
