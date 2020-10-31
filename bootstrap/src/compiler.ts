@@ -237,9 +237,13 @@ class Compiler {
 			else if (x.kind === "func-decl") {
 				this.env.declare(x.name);
 				this.newEnv();
-				const result = `function ${this.env.get(x.name)}(${
-					["this", ...x.params.map(x => this.env.declare(x.name))].join(", ")})\n`
-					+ indent(this.block(x.body)) + `\nend`;
+				// const result = `function ${this.env.get(x.name)}(${
+				// 	["this", ...x.params.map(x => this.env.declare(x.name))].join(", ")})\n`
+				// 	+ indent(this.block(x.body)) + `\nend`;
+				const result = `${this.env.get(x.name)} = ${this.compileFuncLiteral({
+					...x,
+					kind: "func-literal",
+				}, ["this"])}`;
 				this.exitEnv();
 				return result;
 			}
@@ -314,11 +318,12 @@ class Compiler {
 		return `s.array(${node.values.length}, {${node.values.map(x => this.compile(x)).join(", ")}})`;
 	}
 
-	compileFuncLiteral(node: AST.FuncLiteral) {
+	compileFuncLiteral(node: AST.FuncLiteral, extraParams: string[] = []) {
 		this.newEnv();
 		let numRequired = node.params.filter(x => x.defaultValue === undefined && !("rest" in x)).length;
 		node.params.forEach(x => this.env.declare(x.name));
-		const params = [...node.params.slice(0, numRequired).map(x => this.env.get(x.name)), "..."].join(", ");
+		const params = [...extraParams,
+			...node.params.slice(0, numRequired).map(x => this.env.get(x.name)), "..."].join(", ");
 		const body = node.body.map(x => this.compile(x));
 		const preBody = [];
 		preBody.push("local paramsGiven = select(\"#\", ...)");
