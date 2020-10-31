@@ -190,6 +190,10 @@ class Compiler {
 		}
 	}
 
+	compileBreak(node: AST.Break) {
+		return `break`;
+	}
+
 	compileInlineLua(node: AST.InlineLua) {
 		return node.value;
 	}

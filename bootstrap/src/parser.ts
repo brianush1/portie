@@ -60,7 +60,7 @@ export namespace AST {
 	// Statements:
 
 	export type Stat = Decl | ExprStat
-		| If | While | For | Return
+		| If | While | For | Return | Break
 		| Assign;
 
 	export interface If {
@@ -91,6 +91,11 @@ export namespace AST {
 		kind: "return";
 		span: Span;
 		value?: Expr;
+	}
+
+	export interface Break {
+		kind: "break";
+		span: Span;
 	}
 
 	export interface InlineLua {
@@ -738,6 +743,13 @@ export class Parser {
 				kind: "return",
 				span: combineSpans(start.span, this.lexer.last().span),
 				value,
+			};
+		}
+		else if (this.lexer.tryNext(["keyword", "break"])) {
+			this.semi();
+			return {
+				kind: "break",
+				span: combineSpans(start.span, this.lexer.last().span),
 			};
 		}
 		else {

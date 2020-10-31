@@ -6,6 +6,7 @@ type VarInfo = { isConst: boolean };
 class Environment {
 
 	variables = new Map<string, VarInfo>();
+	canBreak = false;
 
 	constructor(
 		public checker: Typechecker,
@@ -51,8 +52,11 @@ class Typechecker {
 	});
 	env = this.genv;
 
-	newEnv() {
+	newEnv(doesBreakChange: boolean) {
 		this.env = new Environment(this, this.env);
+		if (!doesBreakChange) {
+			this.env.canBreak = this.env.parent!.canBreak;
+		}
 	}
 
 	exitEnv() {
@@ -123,7 +127,7 @@ class Typechecker {
 			}
 			if (decl.kind === "func-decl") {
 				// don't forget about checkFuncDecl
-				this.newEnv();
+				this.newEnv(true);
 				let expectingMore = "any";
 				for (const param of decl.params) {
 					this.env.declare(decl.span, param.name, true);
@@ -162,7 +166,7 @@ class Typechecker {
 				this.env.declare(decl.span, "this", true);
 				for (const inner of decl.body) {
 					if (inner.kind === "func-decl" && inner.name === "this") {
-						this.newEnv();
+						this.newEnv(true);
 						for (const param of inner.params) {
 							this.env.declare(inner.span, param.name, true);
 						}
@@ -218,7 +222,7 @@ class Typechecker {
 	}
 
 	checkIf(node: AST.If) {
-		this.newEnv();
+		this.newEnv(false);
 		this.checkCondition(node.cond);
 		for (const stat of node.body) {
 			this.check(stat);
@@ -230,7 +234,8 @@ class Typechecker {
 	}
 
 	checkWhile(node: AST.While) {
-		this.newEnv();
+		this.newEnv(true);
+		this.env.canBreak = true;
 		this.checkCondition(node.cond);
 		for (const stat of node.body) {
 			this.check(stat);
@@ -239,7 +244,8 @@ class Typechecker {
 	}
 
 	checkFor(node: AST.For) {
-		this.newEnv();
+		this.newEnv(true);
+		this.env.canBreak = true;
 		this.check(node.value);
 		this.env.declare(node.span, node.name, true);
 		for (const stat of node.body) {
@@ -251,6 +257,16 @@ class Typechecker {
 	checkReturn(node: AST.Return) {
 		if (node.value) {
 			this.check(node.value);
+		}
+	}
+
+	checkBreak(node: AST.Break) {
+		if (!this.env.canBreak) {
+			this.diagnostics.push({
+				kind: "error",
+				message: "cannot break in this context",
+				spans: [node.span],
+			});
 		}
 	}
 
@@ -282,7 +298,7 @@ class Typechecker {
 	checkFuncDecl(node: AST.FuncDecl) {
 		// don't forget about checkFile
 		this.env.declare(node.span, node.name, true);
-		this.newEnv();
+		this.newEnv(true);
 		let expectingMore = "any";
 		for (const param of node.params) {
 			this.env.declare(node.span, param.name, true);
@@ -325,7 +341,7 @@ class Typechecker {
 		this.env.declare(node.span, "this", true);
 		for (const inner of node.body) {
 			if (inner.kind === "func-decl" && inner.name === "this") {
-				this.newEnv();
+				this.newEnv(true);
 				for (const param of inner.params) {
 					this.env.declare(inner.span, param.name, true);
 				}
@@ -416,7 +432,7 @@ class Typechecker {
 	}
 
 	checkFuncLiteral(node: AST.FuncLiteral) {
-		this.newEnv();
+		this.newEnv(true);
 		let expectingMore = "any";
 		for (const param of node.params) {
 			this.env.declare(node.span, param.name, true);
@@ -458,7 +474,7 @@ class Typechecker {
 	}
 
 	checkIfExpr(node: AST.IfExpr) {
-		this.newEnv();
+		this.newEnv(true);
 		this.checkCondition(node.cond);
 		this.check(node.value);
 		this.check(node.elseValue);
