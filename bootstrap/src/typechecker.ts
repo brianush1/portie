@@ -224,12 +224,16 @@ class Typechecker {
 	checkIf(node: AST.If) {
 		this.newEnv(false);
 		this.checkCondition(node.cond);
+		this.newEnv(false);
 		for (const stat of node.body) {
 			this.check(stat);
 		}
+		this.exitEnv();
+		this.newEnv(false);
 		for (const stat of node.elseBody) {
 			this.check(stat);
 		}
+		this.exitEnv();
 		this.exitEnv();
 	}
 
@@ -476,8 +480,12 @@ class Typechecker {
 	checkIfExpr(node: AST.IfExpr) {
 		this.newEnv(true);
 		this.checkCondition(node.cond);
+		this.newEnv(false);
 		this.check(node.value);
+		this.exitEnv();
+		this.newEnv(false);
 		this.check(node.elseValue);
+		this.exitEnv();
 		this.exitEnv();
 	}
 
