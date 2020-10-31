@@ -265,6 +265,8 @@ export class Lexer {
 				if (escaped) {
 					switch (c) {
 						case "n": value += "\n"; break;
+						case "t": value += "\t"; break;
+						case "r": value += "\r"; break;
 						// TODO: the rest
 						default: value += c; break;
 					}
