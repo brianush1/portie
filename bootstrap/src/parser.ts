@@ -287,6 +287,7 @@ export namespace AST {
 		kind: "named-type";
 		span: Span;
 		name: string;
+		templateArgs?: Type[];
 	}
 
 	export interface NilType {
@@ -1267,10 +1268,26 @@ export class Parser {
 	typeAtom(): AST.Type | undefined {
 		let token;
 		if (token = this.lexer.tryNext("name")) {
+			let templateArgs: AST.Type[] | undefined;
+			if (this.lexer.tryNext(["symbol", "!"])) {
+				this.lexer.next(["symbol", "("], "expected '(' to open template parameters");
+				templateArgs = [];
+				while (this.lexer.until(["symbol", ")"])) {
+					const type = this.type();
+					if (type) {
+						templateArgs.push(type);
+					}
+					if (!this.lexer.tryNext(["symbol", ","])) {
+						break;
+					}
+				}
+				this.lexer.next(["symbol", ")"], "expected ')' to open template parameters");
+			}
 			return {
 				kind: "named-type",
 				span: token.span,
 				name: token.value,
+				templateArgs,
 			};
 		}
 		else if (token = this.lexer.tryNext("string")) {
