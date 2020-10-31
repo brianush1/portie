@@ -124,8 +124,23 @@ class Typechecker {
 			if (decl.kind === "func-decl") {
 				// don't forget about checkFuncDecl
 				this.newEnv();
+				let expectingMore = "any";
 				for (const param of decl.params) {
 					this.env.declare(decl.span, param.name, true);
+					if (expectingMore !== "none" && "rest" in param) {
+						expectingMore = "none";
+					}
+					else if (expectingMore !== "none" && param.defaultValue) {
+						expectingMore = "default";
+						this.check(param.defaultValue);
+					}
+					else if (expectingMore !== "any") {
+						this.diagnostics.push({
+							kind: "error",
+							spans: [node.span],
+							message: "optional parameters must be preceded by required parameters",
+						});
+					}
 				}
 				for (const stat of decl.body) {
 					this.check(stat);
@@ -268,8 +283,23 @@ class Typechecker {
 		// don't forget about checkFile
 		this.env.declare(node.span, node.name, true);
 		this.newEnv();
+		let expectingMore = "any";
 		for (const param of node.params) {
 			this.env.declare(node.span, param.name, true);
+			if (expectingMore !== "none" && "rest" in param) {
+				expectingMore = "none";
+			}
+			else if (expectingMore !== "none" && param.defaultValue) {
+				expectingMore = "default";
+				this.check(param.defaultValue);
+			}
+			else if (expectingMore !== "any") {
+				this.diagnostics.push({
+					kind: "error",
+					spans: [node.span],
+					message: "optional parameters must be preceded by required parameters",
+				});
+			}
 		}
 		for (const stat of node.body) {
 			this.check(stat);
@@ -387,8 +417,23 @@ class Typechecker {
 
 	checkFuncLiteral(node: AST.FuncLiteral) {
 		this.newEnv();
+		let expectingMore = "any";
 		for (const param of node.params) {
 			this.env.declare(node.span, param.name, true);
+			if (expectingMore !== "none" && "rest" in param) {
+				expectingMore = "none";
+			}
+			else if (expectingMore !== "none" && param.defaultValue) {
+				expectingMore = "default";
+				this.check(param.defaultValue);
+			}
+			else if (expectingMore !== "any") {
+				this.diagnostics.push({
+					kind: "error",
+					spans: [node.span],
+					message: "optional parameters must be preceded by required parameters",
+				});
+			}
 		}
 		for (const stat of node.body) {
 			this.check(stat);

@@ -206,12 +206,11 @@ class Compiler {
 
 	compileFuncDecl(node: AST.FuncDecl) {
 		this.env.declare(node.name);
-		const local = this.env.globalDecls ? "" : "local ";
-		this.newEnv();
-		const result = `${local}function ${this.env.get(node.name)}(${
-			node.params.map(x => this.env.declare(x.name)).join(", ")})\n`
-			+ indent(this.block(node.body)) + `\nend`;
-		this.exitEnv();
+		const local = this.env.globalDecls ? "" : `local ${this.env.get(node.name)} `;
+		const result = `${local}${this.env.get(node.name)} = ${this.compileFuncLiteral({
+			...node,
+			kind: "func-literal",
+		})}`;
 		return result;
 	}
 
@@ -313,9 +312,35 @@ class Compiler {
 
 	compileFuncLiteral(node: AST.FuncLiteral) {
 		this.newEnv();
-		const result = `function(${
-			node.params.map(x => this.env.declare(x.name)).join(", ")})\n`
-			+ indent(this.block(node.body)) + `\nend`;
+		let numRequired = node.params.filter(x => x.defaultValue === undefined && !("rest" in x)).length;
+		node.params.forEach(x => this.env.declare(x.name));
+		const params = [...node.params.slice(0, numRequired).map(x => this.env.get(x.name)), "..."].join(", ");
+		const body = node.body.map(x => this.compile(x));
+		const preBody = [];
+		preBody.push("local paramsGiven = select(\"#\", ...)");
+		if (numRequired < node.params.length) {
+			preBody.push(`local ${node.params.slice(numRequired).map(x => this.env.get(x.name)).join(", ")}`);
+		}
+		for (let i = numRequired, j = 0; i < node.params.length; ++i, ++j) {
+			const param = node.params[i];
+			const name = this.env.get(param.name);
+			if ("rest" in param) {
+				preBody.push(`${name} = s.rest(${node.params.length - numRequired - 1}, ...)`);
+			}
+			else {
+				if (!param.defaultValue) {
+					throw 0;
+				}
+				preBody.push(`if paramsGiven <= ${j} then\n`
+					+ `\t${name} = ${this.compile(param.defaultValue)}`);
+				preBody.push(`else\n`
+					+ `\t${name} = select(${j + 1}, ...)`);
+				preBody.push(`end`);
+			}
+		}
+		body.splice(0, 0, ...preBody);
+		const result = `function(${params})\n`
+			+ indent(body.join(";\n")) + `\nend`;
 		this.exitEnv();
 		return result;
 	}

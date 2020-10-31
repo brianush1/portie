@@ -110,14 +110,22 @@ export namespace AST {
 
 	export type Decl = Attribute | FuncDecl | VarDecl | ClassDecl;
 
+	export type Param = {
+		name: string;
+		type: AST.Type;
+		defaultValue?: Expr;
+	} | {
+		name: string;
+		type: AST.Type;
+		defaultValue: undefined;
+		rest: true;
+	};
+
 	export interface FuncDecl {
 		kind: "func-decl";
 		span: Span;
 		name: string;
-		params: {
-			name: string;
-			type: Type;
-		}[];
+		params: Param[];
 		returnType?: AST.Type;
 		body: Stat[];
 	}
@@ -220,10 +228,7 @@ export namespace AST {
 	export interface FuncLiteral {
 		kind: "func-literal";
 		span: Span;
-		params: {
-			name: string;
-			type: Type;
-		}[];
+		params: Param[];
 		returnType?: AST.Type;
 		body: Stat[];
 	}
@@ -784,24 +789,28 @@ export class Parser {
 	func(): {
 		span: Span;
 		body: AST.Stat[];
-		params: {
-			name: string;
-			type: AST.Type;
-		}[];
+		params: AST.Param[];
 		returnType?: AST.Type;
 	} | undefined {
 		const start = this.lexer.peek();
 		this.lexer.next(["symbol", "("], "expected '(' to open parameter list");
-		const params: {
-			name: string;
-			type: AST.Type;
-		}[] = [];
+		const params: AST.Param[] = [];
 		while (this.lexer.until(["symbol", ")"])) {
+			let rest = this.lexer.tryNext(["symbol", "..."]);
 			const name = this.lexer.next("name", "expected parameter name")?.value;
 			this.lexer.next(["symbol", ":"], "expected ':' to separate parameter name and type");
 			const type = this.type();
+			let defaultValue: AST.Expr | undefined;
+			if (this.lexer.tryNext(["symbol", "="]) && !rest) {
+				defaultValue = this.exprOrNil();
+			}
 			if (name && type) {
-				params.push({ name, type });
+				if (rest) {
+					params.push({ name, type, rest: true });
+				}
+				else {
+					params.push({ name, type, defaultValue });
+				}
 			}
 			if (!this.lexer.tryNext(["symbol", ","])) {
 				break;

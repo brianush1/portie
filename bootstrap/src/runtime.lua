@@ -531,6 +531,18 @@ function s.array(length, data)
 	}
 end
 
+function s.rest(optionalParams, ...)
+	local len = select("#", ...)
+	if len <= optionalParams then
+		return s.array(0, {})
+	end
+	local data = {}
+	for i = optionalParams + 1, len do
+		data[i - optionalParams] = select(i, ...)
+	end
+	return s.array(len - optionalParams, data)
+end
+
 s._nil = nil
 
 return s
