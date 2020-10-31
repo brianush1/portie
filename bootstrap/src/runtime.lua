@@ -11,6 +11,12 @@ local function bitop(a, b, oper)
 	return r
 end
 
+local function indent(x)
+	return "\t" .. (x:gsub("\n", "\n\t"))
+end
+
+local Object
+
 local mt mt = {
 	["function"] = {
 		call = function(obj, ...)
@@ -350,7 +356,18 @@ local mt mt = {
 			end
 		end,
 		tostring = function(obj)
-			return "<anonymous class>"
+			local body = {}
+			if obj.class then
+				if obj.class.base ~= Object then
+					table.insert(body, s.tostring(s.super(obj)) .. ",\n")
+				end
+				for k in pairs(obj.class.fields) do
+					table.insert(body, k .. " = " .. s.tostring(s.index(obj, k)) .. ",")
+				end
+			end
+			local result = (obj.class and obj.class.name or "<anonymous class>")
+				.. " {\n" .. indent(table.concat(body, "\n")) .. "\n}"
+			return result
 		end,
 	},
 }
@@ -433,7 +450,9 @@ function s.tostring(obj)
 	return getMeta(obj, "tostring")(obj)
 end
 
-local Object = {}
+Object = {}
+
+Object.name = "Object"
 
 Object.fields = {}
 
@@ -441,11 +460,12 @@ Object.decl = {
 	this = function() end,
 }
 
-function s.class(base)
+function s.class(name, base)
 	local result = {}
 
 	result.fields = {}
 	result.decl = {}
+	result.name = name
 	if base == nil then
 		result.base = Object
 	else

@@ -256,7 +256,7 @@ class Compiler {
 		}).join(";\n");
 		this.exitEnv();
 		return `${this.env.globalDecls ? "" : "local "}${name} = s.class(${
-			node.base ? this.compile(node.base) : ""}) do\n`
+			node.base ? `"${node.name}", ${this.compile(node.base)}` : `"${node.name}"`}) do\n`
 			+ indent(body) + `\nend`;
 	}
 
